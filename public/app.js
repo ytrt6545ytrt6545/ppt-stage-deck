@@ -240,6 +240,12 @@ function connectWebSocket() {
 }
 
 async function init() {
+  try {
+    if (window.outerWidth > window.screen.availWidth - 60) {
+      window.resizeTo(Math.min(1240, window.screen.availWidth - 80), Math.min(800, window.screen.availHeight - 60));
+      window.moveTo(40, 40);
+    }
+  } catch {}
   bindEvents();
   connectWebSocket();
   const res = await fetch('/api/state');

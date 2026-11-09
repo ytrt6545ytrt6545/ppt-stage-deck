@@ -35,9 +35,9 @@ body {
   background-color: var(--bg-surface);
   color: var(--text-main);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", Roboto, sans-serif;
-  line-height: 1.45;
+  line-height: 1.4;
   min-height: 100vh;
-  padding: 12px 16px;
+  padding: 10px 16px;
 }
 
 .app-container {
@@ -45,7 +45,7 @@ body {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* 對標 material-liff-study .card */
@@ -54,7 +54,8 @@ body {
   border-radius: 16px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
   border: 1px solid #f1f5f9;
-  padding: 12px 16px;
+  padding: 10px 14px;
+  min-width: 0;
 }
 
 .card-pgm {
@@ -124,11 +125,11 @@ body {
 
 /* 超大翻頁控場按鈕 */
 .btn-giant {
-  padding: 14px 20px;
-  font-size: 19px;
+  padding: 12px 18px;
+  font-size: 18px;
   font-weight: 700;
   border-radius: 14px;
-  min-height: 58px;
+  min-height: 50px;
   white-space: nowrap;
 }
 
@@ -226,8 +227,8 @@ body {
 /* 主控雙監視器網格 (PGM | CUT | PVW) */
 .dual-monitor-grid {
   display: grid;
-  grid-template-columns: 1fr 150px 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 136px minmax(0, 1fr);
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -244,33 +245,38 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  min-width: 0;
 }
 
 .slot-title-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .slot-deck-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .page-counter-pill {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
-  padding: 4px 14px;
+  padding: 4px 12px;
   border-radius: 9999px;
   background-color: #0f172a;
   color: #ffffff;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 16:9 投影片預覽畫布 */
@@ -278,7 +284,7 @@ body {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-height: 245px;
+  max-height: 170px;
   background-color: #f1f5f9;
   border-radius: 12px;
   border: 1px solid var(--border-color);
@@ -286,7 +292,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .slide-preview-img {
@@ -330,8 +336,8 @@ body {
 /* 底部雙素材池 (PPT 池 | 影片池) */
 .pools-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
 }
 
 .pool-header {

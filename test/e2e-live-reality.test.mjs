@@ -117,6 +117,7 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
   const browserProc = spawn(browserExe, [
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
+    '--window-position=50,40',
     '--window-size=1360,880',
     '--autoplay-policy=no-user-gesture-required',
     '--no-first-run',
@@ -142,6 +143,15 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     stageCdp = new CdpSession(targets.stagePage.webSocketDebuggerUrl);
     await deskCdp.connect();
     await stageCdp.connect();
+    try {
+      const winInfo = await deskCdp.send('Browser.getWindowForTarget');
+      if (winInfo && winInfo.windowId) {
+        await deskCdp.send('Browser.setWindowBounds', {
+          windowId: winInfo.windowId,
+          bounds: { left: 40, top: 40, width: 1200, height: 760, windowState: 'normal' }
+        });
+      }
+    } catch {}
     await deskCdp.send('Page.enable');
     await deskCdp.send('Runtime.enable');
     await stageCdp.send('Page.enable');
@@ -170,6 +180,8 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
       return {
         outerWidth: window.outerWidth,
         outerHeight: window.outerHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
         bodyBg,
         cardBg: cardStyle.backgroundColor,
         cardRadius: cardStyle.borderRadius,
@@ -177,23 +189,33 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
       };
     })()`);
     assert.ok(geomAndStyle.outerWidth > 0 && geomAndStyle.outerHeight > 0);
+    assert.ok(
+      geomAndStyle.scrollWidth <= geomAndStyle.clientWidth,
+      `主控台嚴禁出現水平溢位捲軸 (scrollWidth=${geomAndStyle.scrollWidth}, clientWidth=${geomAndStyle.clientWidth})`
+    );
     assert.equal(geomAndStyle.bodyBg, 'rgb(248, 250, 252)');
     assert.equal(geomAndStyle.cardBg, 'rgb(255, 255, 255)');
     assert.equal(geomAndStyle.cardRadius, '16px');
     assert.equal(geomAndStyle.btnBg, 'rgb(14, 165, 233)');
 
-    // 3. 驗證第二螢幕原生 PowerPoint screenClass 視窗真實渲染且絕非死白畫面
+    // 3. 驗證第二螢幕原生 PowerPoint screenClass 視窗真實渲染、絕非死白畫面，且 WindowFromPoint 確為 PGM 置頂
     const artifactsDir = path.join(projectRoot, 'artifacts');
     fs.mkdirSync(artifactsDir, { recursive: true });
     const stageShot1 = path.join(artifactsDir, 'e2e-screen2-pgm-slide1.png');
     const cap1 = await appServer.pptEngine.captureStage(stageShot1);
+    const stateBefore = appServer.stateMachine.getState();
     assert.equal(cap1.ok, true, '必須成功擷取第二螢幕 PowerPoint screenClass 實體畫面');
     assert.ok(
       cap1.nonBlankSamples > 10,
       `第二螢幕 PowerPoint 畫面不可為空白死白 (實測文字取樣點=${cap1.nonBlankSamples})`
     );
+    assert.equal(
+      cap1.topCenterHwnd,
+      stateBefore.pgm.hwnd,
+      `第二螢幕正中央實際可見最上層視窗 (WindowFromPoint) 必須為當前 PGM 簡報視窗 (probe=${cap1.probePt}, top=${cap1.topCenterHwnd} [${cap1.topCenterClass}: ${cap1.topCenterTitle} @ ${cap1.topCenterRect}], pgm=${stateBefore.pgm.hwnd} @ ${JSON.stringify(stateBefore.pgm.rect)}, pvw=${stateBefore.pvw.hwnd})`
+    );
 
-    // 4. 真實點擊 #btnPgmNext 驗證情況 2 頁內分段動畫步進 (動畫 0/1 -> 動畫 1/1 -> 第 2/3 頁)
+    // 4. 真實點擊 #btnPgmNext 驗證情況 2 頁內分段動畫步進 (動畫 0/1 -> 動畫 1/1 -> 第 2/3 頁) 與第二螢幕像素差分 (Δ > 20)
     const initAnimText = await deskCdp.eval(`document.getElementById('pgmAnimBadge').textContent`);
     assert.equal(initAnimText, '動畫 0 / 1', '第 1 頁初始應顯示 動畫 0 / 1');
 
@@ -203,6 +225,15 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
       return t === '動畫 1 / 1' ? t : null;
     }, 5000);
     assert.equal(step1Anim, '動畫 1 / 1', '點擊第 1 下「下一頁」必須觸發頁內動畫至 1 / 1');
+
+    const stageShotAnim1 = path.join(artifactsDir, 'e2e-screen2-pgm-slide1-anim1.png');
+    const capAnim1 = await appServer.pptEngine.captureStage(stageShotAnim1);
+    assert.ok(
+      capAnim1.nonBlankSamples > cap1.nonBlankSamples + 20,
+      `頁內動畫觸發後第二螢幕文字像素取樣點必須顯著增加 (動畫前=${cap1.nonBlankSamples}, 動畫後=${capAnim1.nonBlankSamples})`
+    );
+    const pgmLiveSrc = await deskCdp.eval(`document.getElementById('pgmPreviewImg').getAttribute('src')`);
+    assert.ok(pgmLiveSrc.includes('_live_pgm.png'), '主控台 PGM 預覽圖必須同步更新為即時 PrintWindow 動畫畫面');
 
     await deskCdp.eval(`document.getElementById('btnPgmNext').click()`);
     const step2Page = await waitForCondition(async () => {
@@ -237,7 +268,13 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
 
     const stageShot2 = path.join(artifactsDir, 'e2e-screen2-after-cut.png');
     const cap2 = await appServer.pptEngine.captureStage(stageShot2);
+    const stateAfterCut = appServer.stateMachine.getState();
     assert.ok(cap2.nonBlankSamples > 10, '切換第 2 份 PPT 上台後，第二螢幕畫面必須清晰顯示第 2 份簡報內容');
+    assert.equal(
+      cap2.topCenterHwnd,
+      stateAfterCut.pgm.hwnd,
+      `點擊 CUT 無縫切換後，第二螢幕正中央實際最上層視窗 (WindowFromPoint) 必須切換為新 PGM 視窗 (top=${cap2.topCenterHwnd} [${cap2.topCenterClass}: ${cap2.topCenterTitle}], pgm=${stateAfterCut.pgm.hwnd}, pvw=${stateAfterCut.pvw.hwnd})`
+    );
 
     // 6. 真實點擊影片池「▶ 全螢幕播放」，驗證 /stage 放映艙 <video> 實際載入並播放，再按停止切回 PPT
     await stageCdp.send('Page.bringToFront');
@@ -270,9 +307,19 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     const blackBgAfter = await deskCdp.eval(`getComputedStyle(document.getElementById('btnBlackScreen')).backgroundColor`);
     assert.notEqual(blackBgBefore, blackBgAfter, '黑屏按鈕計算樣式背景色必須實質突變 (Δ ≠ 0)');
 
-    // 解除黑屏並留存最終主控台快照
+    // 解除黑屏並留存最終主控台與第二螢幕恢復快照
     await deskCdp.eval(`document.getElementById('btnBlackScreen').click()`);
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 350));
+
+    const stageShotFinal = path.join(artifactsDir, 'e2e-screen2-after-video-and-black.png');
+    const capFinal = await appServer.pptEngine.captureStage(stageShotFinal);
+    const stateFinal = appServer.stateMachine.getState();
+    assert.ok(capFinal.nonBlankSamples > 10, '解除影片與黑屏後，第二螢幕必須恢復顯示清晰簡報內容');
+    assert.equal(
+      capFinal.topCenterHwnd,
+      stateFinal.pgm.hwnd,
+      `解除影片與黑屏後，第二螢幕最上層視窗必須恢復為當前 PGM 簡報視窗 (top=${capFinal.topCenterHwnd}, pgm=${stateFinal.pgm.hwnd})`
+    );
 
     const shot = await deskCdp.send('Page.captureScreenshot', { format: 'png' });
     const shotPath = path.join(artifactsDir, 'e2e-ppt-stage-deck-live.png');

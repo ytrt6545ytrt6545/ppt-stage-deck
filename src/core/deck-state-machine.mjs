@@ -259,8 +259,8 @@ export class DeckStateMachine {
       }
 
       case DECK_ACTIONS.SYNC_PPT_RUNTIME: {
-        // 由底層 PowerPoint COM 引擎回報真實頁碼與動畫步數
-        const { slot = 'pgm', deckId, currentSlide, totalSlides, clickIndex, clickCount } = payload;
+        // 由底層 PowerPoint COM 引擎回報真實頁碼、動畫步數與即時 PrintWindow 畫面
+        const { slot = 'pgm', deckId, currentSlide, totalSlides, clickIndex, clickCount, livePreviewUrl, hwnd, topCenterHwnd } = payload;
         const targetKey = slot === 'pvw' ? 'pvw' : 'pgm';
         const deck = this.findDeck(deckId || this.state[targetKey].deckId);
         if (deck) {
@@ -271,6 +271,9 @@ export class DeckStateMachine {
           );
           if (typeof totalSlides === 'number' && totalSlides > 0) updated.totalSlides = totalSlides;
           if (typeof clickCount === 'number' && clickCount >= 0) updated.clickCount = clickCount;
+          if (livePreviewUrl) updated.previewUrl = livePreviewUrl;
+          if (hwnd) updated.hwnd = hwnd;
+          if (topCenterHwnd) updated.topCenterHwnd = topCenterHwnd;
           this.state[targetKey] = updated;
         }
         break;

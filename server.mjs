@@ -75,14 +75,20 @@ export async function createPptStageServer({
     targetDisplay: screenInfo.deviceName || '\\\\.\\DISPLAY2'
   });
 
-  // 啟動時預熱雙 PPT (PGM 與 PVW) 於第二螢幕
+  // 啟動時預熱雙 PPT (PGM 與 PVW) 於第二螢幕並同步即時預覽幀
   const initState = stateMachine.getState();
   if (!mockPpt && (initState.pgm.deckId || initState.pvw.deckId)) {
-    await pptEngine.setSlots({
+    const slotRes = await pptEngine.setSlots({
       pgmDeckId: initState.pgm.deckId,
       pvwDeckId: initState.pvw.deckId,
       stageMode: initState.outputMode
     });
+    if (slotRes && slotRes.ok && slotRes.pgm) {
+      stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pgm', ...slotRes.pgm });
+    }
+    if (slotRes && slotRes.ok && slotRes.pvw) {
+      stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pvw', ...slotRes.pvw });
+    }
   }
 
   const wsClients = new Set();
@@ -94,7 +100,7 @@ export async function createPptStageServer({
     });
     for (const client of wsClients) {
       if (client.readyState === WebSocket.OPEN) {
-        try { client.send(payload); } catch {}
+        try { client.send(payload); } catch { }
       }
     }
   }
@@ -295,8 +301,15 @@ export async function createPptStageServer({
   });
 
   const wss = new WebSocketServer({ server });
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     wsClients.add(ws);
+    const reqUrl = req?.url || '';
+    if (!mockPpt && reqUrl.includes('client=stage')) {
+      setTimeout(() => {
+        const curMode = stateMachine.getState().outputMode;
+        pptEngine.setStageMode(curMode).catch(() => {});
+      }, 250);
+    }
     ws.send(JSON.stringify({
       type: 'INIT_INFO',
       data: {
@@ -325,7 +338,7 @@ export async function createPptStageServer({
     handleAction,
     close: async () => {
       for (const client of wsClients) {
-        try { client.terminate(); } catch {}
+        try { client.terminate(); } catch { }
       }
       wsClients.clear();
       await pptEngine.shutdown();
@@ -375,8 +388,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
         spawn(browser, [
           `--user-data-dir=${deskProfileDir}`,
           `--app=http://127.0.0.1:${boundPort}`,
-          '--window-position=60,40',
-          '--window-size=1320,860',
+          '--window-position=40,40',
+          '--window-size=1240,800',
           '--no-first-run',
           '--no-default-browser-check'
         ], { detached: true, stdio: 'ignore' }).unref();
