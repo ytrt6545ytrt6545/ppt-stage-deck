@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PPT 現場導播控場台 · Stage Deck</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- 1. 頂部清爽導航狀態卡 -->
+    <header class="card top-header">
+      <div class="header-left">
+        <h1 class="app-title">PPT 現場導播控場台</h1>
+        <span id="screenBadge" class="badge badge-live">🟢 第二螢幕已就緒 (DISPLAY2)</span>
+        <span id="outputModeBadge" class="badge">📊 PPT 播出中</span>
+      </div>
+      <div class="header-actions">
+        <button id="btnRefreshPools" type="button" class="btn-outline btn-sm">↻ 重新掃描素材池</button>
+        <button id="btnQrRemote" type="button" class="btn-outline btn-sm">📱 手機掃碼遙控</button>
+        <button id="btnBlackScreen" type="button" class="btn btn-black-mode">◼ 黑屏 (Black)</button>
+      </div>
+    </header>
+
+    <!-- 2. 主控雙監視器區：現在播出 (PGM) ⇄ 無縫切換 ⇄ 準備播出 (PVW) -->
+    <section class="dual-monitor-grid">
+      <!-- 左卡：現在播出 (PGM Live) -->
+      <div id="pgmCard" class="card card-pgm">
+        <div class="slot-header">
+          <div class="slot-title-wrap">
+            <span class="badge badge-live">🔴 現在播出 (PGM)</span>
+            <span id="pgmDeckTitle" class="slot-deck-title">載入中...</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="pgmAnimBadge" class="badge">動畫 0 / 0</span>
+            <span id="pgmPageBadge" class="page-counter-pill">1 / 1</span>
+          </div>
+        </div>
+
+        <div class="slide-preview-box">
+          <img id="pgmPreviewImg" class="slide-preview-img" src="" alt="現在播出投影片預覽" />
+          <div class="next-slide-pip" title="下一頁預覽">
+            <span class="next-slide-pip-label">下一頁</span>
+            <img id="pgmNextPreviewImg" class="slide-preview-img" src="" alt="下一頁預覽" />
+          </div>
+        </div>
+
+        <div class="nav-btn-row">
+          <button id="btnPgmPrev" type="button" class="btn-outline btn-giant">◀ 上一頁</button>
+          <button id="btnPgmNext" type="button" class="btn btn-giant">▶ 下一頁</button>
+        </div>
+      </div>
+
+      <!-- 中央：無縫切換 (CUT) -->
+      <div class="card cut-column">
+        <div class="badge" style="margin-bottom:4px;">雙 PPT 待命互切</div>
+        <button id="btnCutSwap" type="button" class="btn btn-cut-swap">⇄ 無縫切換<br/>(CUT 上台)</button>
+        <div style="font-size:12px; color:#64748b; text-align:center;">
+          點一下立即將右側<br/>預備 PPT 切上第二螢幕
+        </div>
+      </div>
+
+      <!-- 右卡：準備播出 (PVW Cue) -->
+      <div id="pvwCard" class="card card-pvw">
+        <div class="slot-header">
+          <div class="slot-title-wrap">
+            <span class="badge badge-pvw">🟢 準備播出 (PVW 預覽)</span>
+            <span id="pvwDeckTitle" class="slot-deck-title">載入中...</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="pvwAnimBadge" class="badge">動畫 0 / 0</span>
+            <span id="pvwPageBadge" class="page-counter-pill" style="background:#334155;">1 / 1</span>
+          </div>
+        </div>
+
+        <div class="slide-preview-box">
+          <img id="pvwPreviewImg" class="slide-preview-img" src="" alt="準備播出投影片預覽" />
+          <div class="next-slide-pip" title="預備下一頁">
+            <span class="next-slide-pip-label">下一頁</span>
+            <img id="pvwNextPreviewImg" class="slide-preview-img" src="" alt="預備下一頁預覽" />
+          </div>
+        </div>
+
+        <div class="nav-btn-row">
+          <button id="btnPvwPrev" type="button" class="btn-outline btn-giant">◀ 預覽上頁</button>
+          <button id="btnPvwNext" type="button" class="btn-outline btn-giant">▶ 預覽下頁</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 底部雙素材池：左【PPT 簡報池】、右【影片池】 -->
+    <section class="pools-grid">
+      <!-- 左半卡：PPT 簡報池 -->
+      <div class="card">
+        <div class="pool-header">
+          <div>
+            <div class="pool-title">📊 PPT 簡報池 (assets/slides/)</div>
+            <div style="font-size:12px; color:#64748b;">可同時載入 2 份 PPT 分別在「現在播出」與「準備播出」無縫切換</div>
+          </div>
+          <span id="pptCountBadge" class="badge">0 份簡報</span>
+        </div>
+        <div id="pptPoolList" class="pool-list"></div>
+      </div>
+
+      <!-- 右半卡：零雜訊影片池 -->
+      <div class="card">
+        <div class="pool-header">
+          <div>
+            <div class="pool-title">🎬 影片池 (assets/videos/ · 零雜訊全螢幕)</div>
+            <div style="font-size:12px; color:#64748b;">點擊直接於第二螢幕全螢幕純黑播放，播畢自動無縫切回當前 PPT</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="btnStopVideo" type="button" class="btn btn-sm" style="background:#ef4444; display:none;">⏹ 停止影片回 PPT</button>
+            <span id="videoCountBadge" class="badge">0 部影片</span>
+          </div>
+        </div>
+        <div id="videoPoolList" class="pool-list"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 手機掃碼遙控彈窗 -->
+  <div id="qrModal" class="modal-backdrop hidden">
+    <div class="card modal-card">
+      <div style="font-size:18px; font-weight:800; margin-bottom:6px;">📱 手機無線控場遙控台</div>
+      <div style="font-size:13px; color:#64748b; margin-bottom:14px;">
+        手機連上同一 Wi-Fi 後開啟下方網址，即可同步預覽與翻頁：
+      </div>
+      <div id="qrUrlBox" style="padding:12px; background:#f1f5f9; border-radius:12px; font-weight:700; color:#0284c7; word-break:break-all; margin-bottom:16px;">
+        http://127.0.0.1:8890
+      </div>
+      <button id="btnCloseQrModal" type="button" class="btn" style="width:100%;">關閉視窗</button>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
+

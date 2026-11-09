@@ -1,0 +1,15 @@
+{
+  "name": "ppt-stage-deck",
+  "version": "1.0.0",
+  "description": "現場雙軌 PPT (PGM/PVW) 無縫切換與零雜訊影片池導播控場台 (Material LIFF Style)",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
+

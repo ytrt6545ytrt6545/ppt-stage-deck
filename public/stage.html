@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stage Display · 第二螢幕零雜訊放映艙</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden !important;
+      scrollbar-width: none !important;
+      background-color: #000000;
+      color: #ffffff;
+      user-select: none;
+      cursor: none;
+    }
+    #stageSlideImg {
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      display: block;
+      background-color: #000000;
+    }
+    #stageVideo {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background-color: #000000;
+      display: none;
+      z-index: 20;
+    }
+    #blackCurtain {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #000000;
+      display: none;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+  <img id="stageSlideImg" src="" alt="" />
+  <video id="stageVideo" playsinline></video>
+  <div id="blackCurtain"></div>
+
+  <script type="module">
+    const slideImg = document.getElementById('stageSlideImg');
+    const videoEl = document.getElementById('stageVideo');
+    const blackCurtain = document.getElementById('blackCurtain');
+    let currentVideoUrl = null;
+
+    async function notifyVideoEnded() {
+      currentVideoUrl = null;
+      videoEl.style.display = 'none';
+      try {
+        await fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'VIDEO_ENDED' })
+        });
+      } catch {}
+    }
+
+    videoEl.addEventListener('ended', notifyVideoEnded);
+
+    function applyStageState(state) {
+      if (!state) return;
+
+      // 1. 黑屏優先
+      if (state.isBlackScreen || state.outputMode === 'black') {
+        blackCurtain.style.display = 'block';
+      } else {
+        blackCurtain.style.display = 'none';
+      }
+
+      // 2. 投影片基底畫面
+      if (state.pgm && state.pgm.previewUrl) {
+        slideImg.src = state.pgm.previewUrl;
+      }
+
+      // 3. 影片全螢幕零雜訊覆蓋播放 (對標 amrtf-desk 前行影片)
+      if (state.outputMode === 'video' && state.activeVideo && state.activeVideo.url) {
+        videoEl.style.display = 'block';
+        if (currentVideoUrl !== state.activeVideo.url) {
+          currentVideoUrl = state.activeVideo.url;
+          videoEl.src = currentVideoUrl;
+          videoEl.currentTime = 0;
+          videoEl.play().catch(() => {
+            videoEl.muted = false;
+          });
+        }
+      } else {
+        if (currentVideoUrl) {
+          videoEl.pause();
+          videoEl.removeAttribute('src');
+          currentVideoUrl = null;
+        }
+        videoEl.style.display = 'none';
+      }
+    }
+
+    function connectWs() {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${window.location.host}`);
+      ws.addEventListener('message', (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'STATE_UPDATE' && msg.data) {
+            applyStageState(msg.data);
+          }
+        } catch {}
+      });
+      ws.addEventListener('close', () => setTimeout(connectWs, 1500));
+    }
+
+    fetch('/api/state')
+      .then((r) => r.json())
+      .then((d) => { if (d && d.state) applyStageState(d.state); })
+      .catch(() => {});
+    connectWs();
+  </script>
+</body>
+</html>
+

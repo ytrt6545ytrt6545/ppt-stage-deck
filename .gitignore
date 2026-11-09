@@ -1,0 +1,10 @@
+node_modules/
+assets/videos/*.mp4
+assets/videos/*.mov
+assets/videos/*.mkv
+assets/previews/
+*.log
+.env
+
+
+.tmp_cdp_profile/
