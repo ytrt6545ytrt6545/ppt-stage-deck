@@ -119,16 +119,26 @@ export async function createPptStageServer({
 
     if (!mockPpt) {
       if (action === DECK_ACTIONS.LOAD_PGM || action === DECK_ACTIONS.LOAD_PVW) {
-        await pptEngine.setSlots({
+        const slotRes = await pptEngine.setSlots({
           pgmDeckId: nextState.pgm.deckId,
           pvwDeckId: nextState.pvw.deckId,
           stageMode: nextState.outputMode
         });
         if (action === DECK_ACTIONS.LOAD_PGM && nextState.pgm.currentSlide > 0) {
-          await pptEngine.stepSlot({ slot: 'pgm', direction: 'goto', slide: nextState.pgm.currentSlide });
+          const stepRes = await pptEngine.stepSlot({ slot: 'pgm', direction: 'goto', slide: nextState.pgm.currentSlide });
+          if (stepRes && stepRes.ok && stepRes.runtime) {
+            stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pgm', ...stepRes.runtime });
+          }
+        } else if (slotRes && slotRes.ok && slotRes.pgm) {
+          stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pgm', ...slotRes.pgm });
         }
         if (action === DECK_ACTIONS.LOAD_PVW && nextState.pvw.currentSlide > 0) {
-          await pptEngine.stepSlot({ slot: 'pvw', direction: 'goto', slide: nextState.pvw.currentSlide });
+          const stepRes = await pptEngine.stepSlot({ slot: 'pvw', direction: 'goto', slide: nextState.pvw.currentSlide });
+          if (stepRes && stepRes.ok && stepRes.runtime) {
+            stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pvw', ...stepRes.runtime });
+          }
+        } else if (slotRes && slotRes.ok && slotRes.pvw) {
+          stateMachine.dispatch(DECK_ACTIONS.SYNC_PPT_RUNTIME, { slot: 'pvw', ...slotRes.pvw });
         }
       } else if (action === DECK_ACTIONS.CUT_SWAP) {
         const swapRes = await pptEngine.cutSwap();
@@ -348,19 +358,27 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
     if (!process.env.NO_BROWSER) {
       const browser = findBrowserExe();
       if (browser) {
-        // 1. 於第二螢幕開啟零雜訊影片與黑屏基底艙
+        const stageProfileDir = path.join(os.tmpdir(), 'ppt-stage-deck-stage-profile');
+        const deskProfileDir = path.join(os.tmpdir(), 'ppt-stage-deck-desk-profile');
+        // 1. 於第二螢幕開啟零雜訊影片與黑屏基底艙 (獨立 Profile 確保 Autoplay 與座標定位 100% 生效)
         spawn(browser, [
+          `--user-data-dir=${stageProfileDir}`,
           `--app=http://127.0.0.1:${boundPort}/stage`,
           `--window-position=${screenInfo.x},${screenInfo.y}`,
           `--window-size=${screenInfo.width},${screenInfo.height}`,
-          '--autoplay-policy=no-user-gesture-required'
+          '--autoplay-policy=no-user-gesture-required',
+          '--no-first-run',
+          '--no-default-browser-check'
         ], { detached: true, stdio: 'ignore' }).unref();
 
         // 2. 於第一螢幕開啟主控台
         spawn(browser, [
+          `--user-data-dir=${deskProfileDir}`,
           `--app=http://127.0.0.1:${boundPort}`,
-          '--window-position=80,50',
-          '--window-size=1280,820'
+          '--window-position=60,40',
+          '--window-size=1320,860',
+          '--no-first-run',
+          '--no-default-browser-check'
         ], { detached: true, stdio: 'ignore' }).unref();
       }
     }

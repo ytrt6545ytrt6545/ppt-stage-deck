@@ -1,10 +1,9 @@
 # ============================================================================
 # PowerPoint COM Persistent Dual-Deck Worker (100% 7-Bit ASCII Safe)
-# Communicates via Base64 UTF-8 JSON lines over stdin/stdout
+# Uses ShowType=1 (screenClass native fullscreen) + Per-Monitor DPI Awareness
 # ============================================================================
 $ErrorActionPreference = "Continue"
 
-Add-Type -AssemblyName System.Windows.Forms
 Add-Type @"
 using System;
 using System.Text;
@@ -12,25 +11,38 @@ using System.Runtime.InteropServices;
 
 public class PptWin32 {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
     [DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     [DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
 
-    public const int GWL_STYLE = -16;
-    public const int WS_POPUP = unchecked((int)0x80000000);
-    public const int WS_VISIBLE = 0x10000000;
-    public const uint SWP_FRAMECHANGED = 0x0020;
-    public const uint SWP_SHOWWINDOW = 0x0040;
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOACTIVATE = 0x0010;
+    public const uint SWP_SHOWWINDOW = 0x0040;
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
     public static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
 }
 "@
+
+# Must set DPI awareness BEFORE loading System.Windows.Forms so Screen.AllScreens is accurate
+[PptWin32]::SetProcessDPIAware() | Out-Null
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 
 function Get-TargetScreen {
     $screens = [System.Windows.Forms.Screen]::AllScreens
@@ -46,7 +58,7 @@ function Find-SlideShowHwnd([string]$baseName) {
         $sb = New-Object System.Text.StringBuilder 256
         [PptWin32]::GetClassName($hWnd, $sb, 256) | Out-Null
         $cls = $sb.ToString()
-        if ($cls -eq "PPTFrameClass" -or $cls -eq "screenClass") {
+        if ($cls -eq "screenClass") {
             $tb = New-Object System.Text.StringBuilder 512
             [PptWin32]::GetWindowText($hWnd, $tb, 512) | Out-Null
             $title = $tb.ToString()
@@ -60,27 +72,39 @@ function Find-SlideShowHwnd([string]$baseName) {
     return $script:foundHwnd
 }
 
-function Place-BorderlessOnScreen2([IntPtr]$hwnd, [bool]$bringToFront) {
+function Place-SlideShowOnTargetScreen([IntPtr]$hwnd, [bool]$bringToFront) {
     if ($hwnd -eq [IntPtr]::Zero) { return }
     $scr = Get-TargetScreen
     $b = $scr.Bounds
-    $style = [PptWin32]::WS_POPUP -bor [PptWin32]::WS_VISIBLE
-    [PptWin32]::SetWindowLong($hwnd, [PptWin32]::GWL_STYLE, $style) | Out-Null
+    $rc = New-Object PptWin32+RECT
+    [PptWin32]::GetWindowRect($hwnd, [ref]$rc) | Out-Null
+
+    # Check if window is already on target screen; if not, move it without altering GWL_STYLE
+    $needsMove = ($rc.Left -ne $b.X) -or ($rc.Top -ne $b.Y)
     if ($bringToFront) {
         [PptWin32]::ShowWindow($hwnd, 5) | Out-Null
-        [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_TOPMOST, $b.X, $b.Y, $b.Width, $b.Height, ([PptWin32]::SWP_FRAMECHANGED -bor [PptWin32]::SWP_SHOWWINDOW)) | Out-Null
+        if ($needsMove) {
+            [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_TOPMOST, $b.X, $b.Y, $b.Width, $b.Height, [PptWin32]::SWP_SHOWWINDOW) | Out-Null
+        } else {
+            [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_TOPMOST, 0, 0, 0, 0, ([PptWin32]::SWP_NOMOVE -bor [PptWin32]::SWP_NOSIZE -bor [PptWin32]::SWP_SHOWWINDOW)) | Out-Null
+        }
     } else {
-        [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_BOTTOM, $b.X, $b.Y, $b.Width, $b.Height, ([PptWin32]::SWP_FRAMECHANGED -bor [PptWin32]::SWP_NOACTIVATE)) | Out-Null
+        if ($needsMove) {
+            [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_NOTOPMOST, $b.X, $b.Y, $b.Width, $b.Height, [PptWin32]::SWP_NOACTIVATE) | Out-Null
+        } else {
+            [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_NOTOPMOST, 0, 0, 0, 0, ([PptWin32]::SWP_NOMOVE -bor [PptWin32]::SWP_NOSIZE -bor [PptWin32]::SWP_NOACTIVATE)) | Out-Null
+        }
+        [PptWin32]::SetWindowPos($hwnd, [PptWin32]::HWND_BOTTOM, 0, 0, 0, 0, ([PptWin32]::SWP_NOMOVE -bor [PptWin32]::SWP_NOSIZE -bor [PptWin32]::SWP_NOACTIVATE)) | Out-Null
     }
 }
 
 $pptApp = $null
-$openDecks = @{} # deckId -> @{ pres, ssw, hwnd, filePath, baseName, slideCount, slideClicks }
+$openDecks = @{}
 $slots = @{
     pgm = $null
     pvw = $null
 }
-$stageMode = "ppt" # "ppt" | "video" | "black"
+$stageMode = "ppt"
 
 function Ensure-PptApp {
     if ($null -eq $script:pptApp) {
@@ -150,11 +174,13 @@ function Ensure-SlideShowWindow($entry) {
     }
     $pres = $entry.pres
     $pres.SlideShowSettings.ShowPresenterView = 0
-    $pres.SlideShowSettings.ShowType = 2
-    $pres.SlideShowSettings.ShowScrollbar = 0
+    $pres.SlideShowSettings.ShowType = 1
     $ssw = $pres.SlideShowSettings.Run()
-    Start-Sleep -Milliseconds 120
-    $hwnd = Find-SlideShowHwnd $entry.baseName
+    for ($retry = 0; $retry -lt 10; $retry++) {
+        Start-Sleep -Milliseconds 80
+        $hwnd = Find-SlideShowHwnd $entry.baseName
+        if ($hwnd -ne [IntPtr]::Zero) { break }
+    }
     $entry.ssw = $ssw
     $entry.hwnd = $hwnd
     return $ssw
@@ -164,7 +190,7 @@ function Sync-WindowZOrder {
     $pgmId = $script:slots.pgm
     $pvwId = $script:slots.pvw
 
-    if ($script:stageMode -ne "ppt") {
+    if ($script:stageMode -eq "video") {
         foreach ($k in $script:openDecks.Keys) {
             $h = $script:openDecks[$k].hwnd
             if ($h -ne [IntPtr]::Zero) {
@@ -177,13 +203,13 @@ function Sync-WindowZOrder {
     if ($null -ne $pvwId -and $pvwId -ne $pgmId -and $script:openDecks.ContainsKey($pvwId)) {
         $pvwEntry = $script:openDecks[$pvwId]
         Ensure-SlideShowWindow $pvwEntry | Out-Null
-        Place-BorderlessOnScreen2 $pvwEntry.hwnd $false
+        Place-SlideShowOnTargetScreen $pvwEntry.hwnd $false
     }
 
     if ($null -ne $pgmId -and $script:openDecks.ContainsKey($pgmId)) {
         $pgmEntry = $script:openDecks[$pgmId]
         Ensure-SlideShowWindow $pgmEntry | Out-Null
-        Place-BorderlessOnScreen2 $pgmEntry.hwnd $true
+        Place-SlideShowOnTargetScreen $pgmEntry.hwnd $true
     }
 }
 
@@ -199,9 +225,22 @@ function Get-SlotRuntime($deckId) {
     try { $pos = [int]$ssw.View.CurrentShowPosition } catch {}
     try { $clickIdx = [int]$ssw.View.GetClickIndex() } catch {}
     try { $clickCnt = [int]$ssw.View.GetClickCount() } catch {}
+    $rc = New-Object PptWin32+RECT
+    $vis = $false
+    if ($entry.hwnd -ne [IntPtr]::Zero) {
+        [PptWin32]::GetWindowRect($entry.hwnd, [ref]$rc) | Out-Null
+        $vis = [PptWin32]::IsWindowVisible($entry.hwnd)
+    }
     return @{
         deckId = $deckId
         hwnd = $entry.hwnd.ToInt64()
+        visible = $vis
+        rect = @{
+            x = $rc.Left
+            y = $rc.Top
+            width = ($rc.Right - $rc.Left)
+            height = ($rc.Bottom - $rc.Top)
+        }
         currentSlide = $pos
         totalSlides = $entry.slideCount
         clickIndex = $clickIdx
@@ -275,11 +314,26 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 if ($null -ne $dId -and $script:openDecks.ContainsKey($dId)) {
                     $entry = $script:openDecks[$dId]
                     $ssw = Ensure-SlideShowWindow $entry
+                    $oldPos = 1
+                    $oldClick = 0
+                    $maxClick = 0
+                    try { $oldPos = [int]$ssw.View.CurrentShowPosition } catch {}
+                    try { $oldClick = [int]$ssw.View.GetClickIndex() } catch {}
+                    try { $maxClick = [int]$ssw.View.GetClickCount() } catch {}
+
                     $dir = $p.direction
                     if ($dir -eq "next") {
-                        $ssw.View.Next()
+                        if ($oldClick -lt $maxClick) {
+                            $ssw.View.Next()
+                        } elseif ($oldPos -lt $entry.slideCount) {
+                            $ssw.View.GotoSlide($oldPos + 1)
+                        }
                     } elseif ($dir -eq "prev") {
-                        $ssw.View.Previous()
+                        if ($oldClick -gt 0) {
+                            $ssw.View.Previous()
+                        } elseif ($oldPos -gt 1) {
+                            $ssw.View.GotoSlide($oldPos - 1)
+                        }
                     } elseif ($dir -eq "goto" -and $p.slide) {
                         $ssw.View.GotoSlide([int]$p.slide)
                     }
@@ -315,6 +369,49 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 }
                 Sync-WindowZOrder
                 Send-Response @{ id = $reqId; ok = $true; mode = $script:stageMode }
+            }
+            "CAPTURE_STAGE" {
+                $outPath = $p.outputPath
+                $pgmId = $script:slots.pgm
+                $w = 800
+                $ht = 600
+                $nonBlankSamples = 0
+                if ($null -ne $pgmId -and $script:openDecks.ContainsKey($pgmId) -and $script:openDecks[$pgmId].hwnd -ne [IntPtr]::Zero) {
+                    $hwnd = $script:openDecks[$pgmId].hwnd
+                    $rc = New-Object PptWin32+RECT
+                    [PptWin32]::GetWindowRect($hwnd, [ref]$rc) | Out-Null
+                    $w = [Math]::Max(100, ($rc.Right - $rc.Left))
+                    $ht = [Math]::Max(100, ($rc.Bottom - $rc.Top))
+                    $bmp = New-Object System.Drawing.Bitmap($w, $ht)
+                    $g = [System.Drawing.Graphics]::FromImage($bmp)
+                    $hdc = $g.GetHdc()
+                    [PptWin32]::PrintWindow($hwnd, $hdc, 2) | Out-Null
+                    $g.ReleaseHdc($hdc)
+                    # Sample grid in center slide region to verify dark text pixels exist on white slide background
+                    for ($sx = [int]($w * 0.15); $sx -lt [int]($w * 0.85); $sx += 8) {
+                        for ($sy = [int]($ht * 0.2); $sy -lt [int]($ht * 0.8); $sy += 8) {
+                            $px = $bmp.GetPixel($sx, $sy)
+                            if ($px.R -lt 200 -and $px.R -gt 0) {
+                                $nonBlankSamples++
+                            } elseif ($px.R -eq 0 -and $px.G -eq 0 -and $px.B -eq 0) {
+                                # pure black text pixel inside white slide region
+                                $bgPx = $bmp.GetPixel([int]($w * 0.1), [int]($ht * 0.5))
+                                if ($bgPx.R -gt 240) { $nonBlankSamples++ }
+                            }
+                        }
+                    }
+                    $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
+                    $g.Dispose()
+                    $bmp.Dispose()
+                }
+                Send-Response @{
+                    id = $reqId
+                    ok = $true
+                    outputPath = $outPath
+                    width = $w
+                    height = $ht
+                    nonBlankSamples = $nonBlankSamples
+                }
             }
             "SHUTDOWN" {
                 foreach ($k in $script:openDecks.Keys) {

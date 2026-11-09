@@ -129,6 +129,10 @@ export class PptComEngine {
     return this.sendCommand('SET_STAGE_MODE', { mode });
   }
 
+  async captureStage(outputPath) {
+    return this.sendCommand('CAPTURE_STAGE', { outputPath });
+  }
+
   async shutdown() {
     if (this.mockMode || !this.proc) return;
     try {

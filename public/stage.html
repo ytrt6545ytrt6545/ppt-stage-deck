@@ -84,16 +84,20 @@
         slideImg.src = state.pgm.previewUrl;
       }
 
-      // 3. 影片全螢幕零雜訊覆蓋播放 (對標 amrtf-desk 前行影片)
+      // 3. 影片全螢幕零雜訊覆蓋播放 (對標 amrtf-desk 前行影片 + 防 Autoplay 阻斷雙軌啟動)
       if (state.outputMode === 'video' && state.activeVideo && state.activeVideo.url) {
         videoEl.style.display = 'block';
         if (currentVideoUrl !== state.activeVideo.url) {
           currentVideoUrl = state.activeVideo.url;
           videoEl.src = currentVideoUrl;
-          videoEl.currentTime = 0;
-          videoEl.play().catch(() => {
-            videoEl.muted = false;
-          });
+          videoEl.muted = false;
+          const playPromise = videoEl.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              videoEl.muted = true;
+              videoEl.play().catch(() => {});
+            });
+          }
         }
       } else {
         if (currentVideoUrl) {

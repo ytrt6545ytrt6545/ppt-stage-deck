@@ -141,6 +141,10 @@ export class DeckStateMachine {
       case DECK_ACTIONS.LOAD_PGM: {
         const deck = this.findDeck(payload.deckId);
         if (deck) {
+          const prevPgm = { ...this.state.pgm };
+          if (this.state.pvw.deckId === deck.id && prevPgm.deckId && prevPgm.deckId !== deck.id) {
+            this.state.pvw = prevPgm;
+          }
           this.state.pgm = buildSlotState(deck, payload.slide || 1, 0);
           this.state.activeVideo = null;
           this.state.isBlackScreen = false;
@@ -152,6 +156,10 @@ export class DeckStateMachine {
       case DECK_ACTIONS.LOAD_PVW: {
         const deck = this.findDeck(payload.deckId);
         if (deck) {
+          const prevPvw = { ...this.state.pvw };
+          if (this.state.pgm.deckId === deck.id && prevPvw.deckId && prevPvw.deckId !== deck.id) {
+            this.state.pgm = prevPvw;
+          }
           this.state.pvw = buildSlotState(deck, payload.slide || 1, 0);
         }
         break;
