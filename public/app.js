@@ -671,6 +671,7 @@ export function renderState(state) {
         pgmVideoPlayer.dataset.rawUrl = state.activeVideo.url;
         pgmVideoPlayer.preload = 'auto';
         pgmVideoPlayer.src = pgmScopedUrl;
+        try { pgmVideoPlayer.load(); } catch {}
         const targetStart = (Number.isFinite(state.activeVideo.startTime) && state.activeVideo.startTime > 0)
           ? state.activeVideo.startTime
           : 0;
@@ -755,11 +756,15 @@ export function renderState(state) {
       pgmImg.style.display = state.keyVisualUrl ? 'block' : 'none';
     }
   } else if (isPgmEmpty) {
-    // 空槽待命 (長官全新思維冷啟動)
-    document.getElementById('pgmDeckTitle').textContent = state.outputMode === 'kv' ? '主視覺 (KV) 放映中' : '⚪ 空槽待命 (STANDBY)';
-    document.getElementById('pgmPageBadge').textContent = state.outputMode === 'kv' ? '主視覺' : '待命';
+    // 空槽待命 (長官指示：⚪ 空槽待命 (STANDBY) 不用出現，保持標題純淨留白)
+    document.getElementById('pgmDeckTitle').textContent = state.outputMode === 'kv' ? '主視覺 (KV) 放映中' : '';
+    const pgmPageBadge = document.getElementById('pgmPageBadge');
+    if (pgmPageBadge) {
+      pgmPageBadge.textContent = state.outputMode === 'kv' ? '主視覺' : '';
+      pgmPageBadge.style.display = state.outputMode === 'kv' ? 'inline-flex' : 'none';
+    }
     if (pgmAnimBadgeEl) {
-      pgmAnimBadgeEl.textContent = '無內容';
+      pgmAnimBadgeEl.textContent = '';
       pgmAnimBadgeEl.style.display = 'none';
     }
 
@@ -787,7 +792,11 @@ export function renderState(state) {
   } else {
     // PPT 正常播出
     document.getElementById('pgmDeckTitle').textContent = pgm.title || '尚未載入簡報';
-    document.getElementById('pgmPageBadge').textContent = `${pgm.currentSlide || 0} / ${pgm.totalSlides || 0}`;
+    const pgmPageBadge = document.getElementById('pgmPageBadge');
+    if (pgmPageBadge) {
+      pgmPageBadge.textContent = `${pgm.currentSlide || 0} / ${pgm.totalSlides || 0}`;
+      pgmPageBadge.style.display = 'inline-flex';
+    }
     if (pgmAnimBadgeEl) {
       pgmAnimBadgeEl.textContent =
         pgm.clickCount > 0 ? `動畫 ${pgm.clickIndex || 0} / ${pgm.clickCount}` : '無頁內動畫';
@@ -889,6 +898,7 @@ export function renderState(state) {
         const sep = pvwMedia.url.includes('?') ? '&' : '?';
         pvwVideoPlayer.preload = 'metadata';
         pvwVideoPlayer.src = `${pvwMedia.url}${sep}slot=pvw`;
+        try { pvwVideoPlayer.load(); } catch {}
         pvwVideoPlayer.muted = true;
         pvwVideoPlayer.addEventListener('loadedmetadata', applyPvwPlaybackState, { once: true });
       }
@@ -910,11 +920,15 @@ export function renderState(state) {
       pvwImg.style.display = 'block';
     }
   } else if (isPvwEmpty) {
-    // 空槽待命 (無素材)
-    document.getElementById('pvwDeckTitle').textContent = '⚪ 空槽待命 (STANDBY)';
-    document.getElementById('pvwPageBadge').textContent = '待命';
+    // 空槽待命 (長官指示：⚪ 空槽待命 (STANDBY) 不用出現，保持標題純淨留白)
+    document.getElementById('pvwDeckTitle').textContent = '';
+    const pvwPageBadge = document.getElementById('pvwPageBadge');
+    if (pvwPageBadge) {
+      pvwPageBadge.textContent = '';
+      pvwPageBadge.style.display = 'none';
+    }
     if (pvwAnimBadgeEl) {
-      pvwAnimBadgeEl.textContent = '無內容';
+      pvwAnimBadgeEl.textContent = '';
       pvwAnimBadgeEl.style.display = 'none';
     }
 
@@ -939,7 +953,11 @@ export function renderState(state) {
     if (pvwEmptyPlaceholder) pvwEmptyPlaceholder.style.display = 'none';
     if (pvwNextPip) pvwNextPip.style.display = 'block';
     document.getElementById('pvwDeckTitle').textContent = pvw.title || '尚未載入簡報';
-    document.getElementById('pvwPageBadge').textContent = `${pvw.currentSlide || 0} / ${pvw.totalSlides || 0}`;
+    const pvwPageBadge = document.getElementById('pvwPageBadge');
+    if (pvwPageBadge) {
+      pvwPageBadge.textContent = `${pvw.currentSlide || 0} / ${pvw.totalSlides || 0}`;
+      pvwPageBadge.style.display = 'inline-flex';
+    }
     if (pvwAnimBadgeEl) {
       pvwAnimBadgeEl.textContent =
         pvw.clickCount > 0 ? `動畫 ${pvw.clickIndex || 0} / ${pvw.clickCount}` : '無頁內動畫';

@@ -186,15 +186,15 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     await stageCdp.send('Page.enable');
     await stageCdp.send('Runtime.enable');
 
-    // 0. (長官鐵律) 驗證開機預設為純淨雙空槽 (STANDBY)，PGM 與 PVW 無任何素材自動預載
+    // 0. (長官鐵律) 驗證開機預設為純淨雙空槽，標題無贅字留白，PGM 與 PVW 無任何素材自動預載
     const initSlotsEmpty = await waitForCondition(async () => {
       return await deskCdp.eval(`(() => {
-        const pgmTitle = document.getElementById('pgmDeckTitle')?.textContent || '';
-        const pvwTitle = document.getElementById('pvwDeckTitle')?.textContent || '';
-        return (pgmTitle.includes('空槽') || pgmTitle.includes('主視覺')) && pvwTitle.includes('空槽');
+        const pgmTitle = (document.getElementById('pgmDeckTitle')?.textContent || '').trim();
+        const pvwTitle = (document.getElementById('pvwDeckTitle')?.textContent || '').trim();
+        return (pgmTitle === '' || pgmTitle.includes('主視覺')) && pvwTitle === '';
       })()`);
     }, 5000);
-    assert.equal(initSlotsEmpty, true, '開機冷啟動預設 PGM 與 PVW 必須 100% 為空槽待命 (STANDBY)，無素材自動預載');
+    assert.equal(initSlotsEmpty, true, '開機冷啟動預設 PGM 與 PVW 標題必須純淨留白無贅字，無素材自動預載');
 
     // 1. 導播從流程隊列手動將 PPT-1「直接播出」與 PPT-2「送至預覽」
     await deskCdp.send('Page.bringToFront');

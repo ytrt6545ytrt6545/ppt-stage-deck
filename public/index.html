@@ -113,19 +113,17 @@
               <div class="slot-header">
                 <div class="slot-title-wrap">
                   <span class="badge badge-live">播出 (PGM)</span>
-                  <span id="pgmDeckTitle" class="slot-deck-title">載入中...</span>
+                  <span id="pgmDeckTitle" class="slot-deck-title"></span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <span id="pgmAnimBadge" class="badge">動畫 0 / 0</span>
-                  <span id="pgmPageBadge" class="page-counter-pill">1 / 1</span>
+                  <span id="pgmAnimBadge" class="badge" style="display:none;"></span>
+                  <span id="pgmPageBadge" class="page-counter-pill" style="display:none;"></span>
                 </div>
               </div>
 
               <div class="slide-preview-box">
                 <div id="pgmEmptyPlaceholder" class="slot-empty-placeholder" style="display:none;">
-                  <span style="font-size:24px;">⚪</span>
-                  <span>PGM 空槽待命中</span>
-                  <span style="font-size:11px; font-weight:500; color:#64748b;">點選左側流程佇列或素材「直接播出」</span>
+                  <span style="font-size:12px; font-weight:500; color:#64748b;">點選左側流程隊列或素材「直接播出」</span>
                 </div>
                 <img id="pgmPreviewImg" class="slide-preview-img" src="" alt="播出預覽" />
                 <video id="pgmVideoPlayer" class="slide-preview-img" preload="none" style="display:none; object-fit:contain; background:#000;" playsinline muted></video>
@@ -154,20 +152,18 @@
               <div class="slot-header">
                 <div class="slot-title-wrap">
                   <span class="badge badge-pvw">預覽 (PVW)</span>
-                  <span id="pvwDeckTitle" class="slot-deck-title">載入中...</span>
+                  <span id="pvwDeckTitle" class="slot-deck-title"></span>
                 </div>
                 <div style="display:flex; align-items:center; gap:6px;">
-                  <span id="pvwAnimBadge" class="badge">動畫 0 / 0</span>
-                  <span id="pvwPageBadge" class="page-counter-pill" style="background:#334155;">1 / 1</span>
+                  <span id="pvwAnimBadge" class="badge" style="display:none;"></span>
+                  <span id="pvwPageBadge" class="page-counter-pill" style="display:none; background:#334155;"></span>
                   <button id="btnPopoutMonitors" type="button" class="btn-popout-icon" title="彈出主控雙監為獨立視窗 (可放最大螢幕)">⤢</button>
                 </div>
               </div>
 
               <div class="slide-preview-box">
                 <div id="pvwEmptyPlaceholder" class="slot-empty-placeholder" style="display:none;">
-                  <span style="font-size:24px;">⚪</span>
-                  <span>PVW 空槽待命中</span>
-                  <span style="font-size:11px; font-weight:500; color:#64748b;">點選左側流程佇列或素材「送至預覽」</span>
+                  <span style="font-size:12px; font-weight:500; color:#64748b;">點選左側流程隊列或素材「送至預覽」</span>
                 </div>
                 <img id="pvwPreviewImg" class="slide-preview-img" src="" alt="預覽" />
                 <video id="pvwVideoPlayer" class="slide-preview-img" preload="none" style="display:none; width:100%; height:100%; object-fit:contain; background:#000;" playsinline muted></video>
