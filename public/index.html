@@ -40,6 +40,7 @@
         <button id="btnRefreshPools" type="button" class="btn-outline btn-sm" title="重新掃描素材目錄">重掃</button>
         <button id="btnStopVideo" type="button" class="btn btn-sm" style="display:none; background:#ef4444; border-color:#ef4444; color:#ffffff; font-weight:bold;">停止影片</button>
         <button id="btnBlackScreen" type="button" class="btn btn-black-mode">黑屏</button>
+        <button id="btnOpenHelpModal" type="button" class="btn-outline btn-sm btn-help-guide" title="查看系統解決方案與現場操作說明">📖 使用說明</button>
         <div id="updateBadgeWrap" class="update-badge-wrap">
           <button id="btnVersionBadge" type="button" class="btn-version-badge" title="目前版本 v1.0.0 (點擊檢查更新)">v1.0.0</button>
         </div>
@@ -401,6 +402,89 @@
         <a id="btnOpenGithubRelease" href="https://github.com/ytrt6545ytrt6545/ppt-stage-deck/releases" target="_blank" rel="noopener" class="btn-outline btn-sm" style="display:none; text-decoration:none;">🌐 前往 GitHub</a>
         <button id="btnStartPerformUpdate" type="button" class="btn btn-sm btn-update-action" style="display:none; background:#10b981; border-color:#10b981; color:#fff; font-weight:bold;">⬇️ 一鍵立即更新</button>
         <button id="btnDismissUpdateModal" type="button" class="btn-outline btn-sm">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 系統方案與現場操作說明彈窗 (Help Guide Modal) -->
+  <div id="helpModal" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+    <div class="update-modal-dialog help-modal-dialog">
+      <div class="update-modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">📖</span>
+          <h3 id="helpModalTitle" class="update-modal-title">PPT 現場導播控場方案與操作說明</h3>
+        </div>
+        <button id="btnCloseHelpModal" type="button" class="btn-close-modal" aria-label="關閉">✕</button>
+      </div>
+      <div class="update-modal-body help-modal-body">
+        
+        <!-- 方案理念 -->
+        <div class="help-section-card">
+          <div class="help-section-title">💡 系統解決方案核心理念</div>
+          <div class="help-section-desc">
+            傳統現場投影播放 PPT 時，常遇到<strong>「換檔黑屏空檔」、「投影畫面跳出桌面或控制視窗穿幫」、「講師臨時改字必須退出演講」</strong>等尷尬痛點。<br/>
+            本系統導入<strong>廣播電視台導播台之「雙軌雙監控 (PGM/PVW) ＋ CUT 無縫切換」方案</strong>：
+            現場觀眾只看 <strong>PGM 播出軌</strong>，導播人員在 <strong>PVW 預覽軌</strong> 獨立翻頁、預覽備便；按下中央 <strong>CUT 鍵</strong> 瞬間零秒互換，實現完全零穿幫、無縫切換！
+          </div>
+        </div>
+
+        <!-- 快速上手 4 步 -->
+        <div class="help-section-card">
+          <div class="help-section-title">🚀 現場標準作業流程 (SOP 四步驟)</div>
+          <div class="help-steps-list">
+            <div class="help-step-item">
+              <span class="step-num">1</span>
+              <div>
+                <strong>素材就位</strong>：將簡報（<code>.pptx/.pptm</code>）或影音直接拖入左側「現場流程隊列」，或放入本機 <code>assets/slides/</code>、<code>assets/videos/</code> 目錄。
+              </div>
+            </div>
+            <div class="help-step-item">
+              <span class="step-num">2</span>
+              <div>
+                <strong>雙螢幕延伸</strong>：按 Windows 鍵 <code>Win + P</code> 選擇<strong>「延伸」</strong>，系統將自動偵測並鎖定第二螢幕進行全螢幕大畫面投影。
+              </div>
+            </div>
+            <div class="help-step-item">
+              <span class="step-num">3</span>
+              <div>
+                <strong>雙軌備便與 CUT 切換</strong>：
+                在左欄卡片點擊「預覽」將下一份 PPT 或影片推上右側 <strong>PVW 預覽軌</strong>，確認無誤後點擊中央大按鈕 <strong>CUT 切換</strong>，毫秒級無縫登台！
+              </div>
+            </div>
+            <div class="help-step-item">
+              <span class="step-num">4</span>
+              <div>
+                <strong>快選跳頁與即時改字</strong>：
+                下方工作塢切換至「📑 PPT 快選與修改」，單擊縮圖快速跳頁；若有錯字直接在文字框修改並按「寫回本頁文字」，大螢幕<strong>即時自動重繪新文字</strong>，無需重新放映！
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 多視窗獨立拖放方案 -->
+        <div class="help-section-card">
+          <div class="help-section-title">🪟 獨立多視窗拖放方案 (Multi-Window)</div>
+          <div class="help-section-desc">
+            若您的主控電腦配有多個螢幕，可點擊頂部 <strong>「🪟 拆分視窗」</strong>（或各模組右上角 <strong>⤢</strong> 圖標），將「流程隊列」、「雙監視器」與「工作塢」拆分為 3 個獨立 Windows 視窗自由擺放拖曳！母視窗可隨時點擊 <strong>「↙ 全部收回」</strong> 一鍵恢復。
+          </div>
+        </div>
+
+        <!-- 常用快捷鍵 -->
+        <div class="help-section-card">
+          <div class="help-section-title">⌨️ 現場常用快捷鍵速查</div>
+          <div class="help-hotkeys-grid">
+            <div><kbd>空白鍵</kbd> / <kbd>PageDown</kbd> / <kbd>→</kbd>：PGM 下一頁/下一動畫</div>
+            <div><kbd>PageUp</kbd> / <kbd>←</kbd>：PGM 返回上一頁</div>
+            <div><kbd>C</kbd> 鍵：CUT 切換（PGM 與 PVW 瞬間互換）</div>
+            <div><kbd>B</kbd> 鍵：緊急全黑屏切換</div>
+            <div><kbd>K</kbd> 鍵：大會主視覺底圖切換</div>
+            <div><kbd>Esc</kbd> 鍵：關閉彈窗或緊急退場</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="update-modal-footer">
+        <button id="btnDismissHelpModal" type="button" class="btn btn-sm" style="background:#0284c7; border-color:#0284c7; color:#fff;">我知道了</button>
       </div>
     </div>
   </div>

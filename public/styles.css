@@ -1854,3 +1854,107 @@ body[data-view="dock"] .all-media-card {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ==========================================================================
+   📖 系統解決方案與現場操作說明彈窗樣式 (Help Guide Modal)
+   ========================================================================== */
+
+.btn-help-guide {
+  font-weight: 600;
+  color: #0369a1;
+  border-color: #bae6fd;
+  background-color: #f0f9ff;
+  transition: all 0.15s ease;
+}
+
+.btn-help-guide:hover {
+  background-color: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0284c7;
+}
+
+.help-modal-dialog {
+  max-width: 680px;
+}
+
+.help-modal-body {
+  gap: 12px;
+  max-height: 70vh;
+}
+
+.help-section-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.help-section-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-section-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.help-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.help-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.step-num {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  background-color: #0284c7;
+  color: #ffffff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.help-hotkeys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 12px;
+  font-size: 11.5px;
+  color: #475569;
+  margin-top: 4px;
+}
+
+kbd {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 700;
+  color: #1e293b;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}

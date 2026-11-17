@@ -2914,11 +2914,44 @@ function initUpdateSystem() {
   setTimeout(() => checkUpdate(true, false), 1500);
 }
 
+// ============================================================================
+// 📖 現場操作指引與系統解決方案彈窗 (Help Guide Sentinel)
+// ============================================================================
+
+function initHelpGuideSystem() {
+  const btnOpenHelpModal = document.getElementById('btnOpenHelpModal');
+  const helpModal = document.getElementById('helpModal');
+  const btnCloseHelpModal = document.getElementById('btnCloseHelpModal');
+  const btnDismissHelpModal = document.getElementById('btnDismissHelpModal');
+
+  function openHelp() {
+    if (helpModal) helpModal.style.display = 'flex';
+  }
+
+  function closeHelp() {
+    if (helpModal) helpModal.style.display = 'none';
+  }
+
+  btnOpenHelpModal?.addEventListener('click', openHelp);
+  btnCloseHelpModal?.addEventListener('click', closeHelp);
+  btnDismissHelpModal?.addEventListener('click', closeHelp);
+  helpModal?.addEventListener('click', (e) => {
+    if (e.target === helpModal) closeHelp();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && helpModal && helpModal.style.display !== 'none') {
+      closeHelp();
+    }
+  });
+}
+
 // 啟動入口
 window.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   initPopoutSystem();
   initUpdateSystem();
+  initHelpGuideSystem();
   connectWs();
   fetch('/api/state')
     .then((r) => r.json())
