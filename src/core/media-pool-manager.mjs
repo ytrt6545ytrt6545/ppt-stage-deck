@@ -48,6 +48,7 @@ export class MediaPoolManager {
         if (fs.existsSync(dir)) {
           const entries = fs.readdirSync(dir);
           for (const entry of entries) {
+            if (entry === '.gitkeep') continue;
             const fullPath = path.join(dir, entry);
             try {
               fs.rmSync(fullPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

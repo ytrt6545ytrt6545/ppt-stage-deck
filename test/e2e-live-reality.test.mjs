@@ -138,6 +138,9 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     '--window-position=50,40',
     '--window-size=1360,880',
     '--autoplay-policy=no-user-gesture-required',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
     '--no-first-run',
     '--no-default-browser-check',
     baseUrl,
@@ -416,8 +419,14 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     // 6. 真實測試「第一次 PPT 與影片 CUT 交換」：先送影片至 PVW，按 CUT 切換，驗證第一次即刻出畫面且無 screenClass 遮擋，再按 CUT 換回 PPT
     await stageCdp.send('Page.bringToFront');
     await deskCdp.eval(`document.querySelector('.btn-pvw-video').click()`);
-    await new Promise((r) => setTimeout(r, 250));
+    await waitForCondition(async () => {
+      return await deskCdp.eval(`(() => {
+        const pvwPlayer = document.getElementById('pvwVideoPlayer');
+        return pvwPlayer && getComputedStyle(pvwPlayer).display === 'block';
+      })()`);
+    }, 5000);
     await deskCdp.eval(`document.getElementById('btnCutSwap').click()`);
+    await stageCdp.send('Page.bringToFront');
 
     const firstCutStagePlaying = await waitForCondition(async () => {
       return await stageCdp.eval(`(() => {

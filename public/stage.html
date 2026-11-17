@@ -169,6 +169,7 @@
           const sep = currentVideoUrl.includes('?') ? '&' : '?';
           videoEl.preload = 'auto';
           videoEl.src = `${currentVideoUrl}${sep}slot=stage`;
+          try { videoEl.load(); } catch {}
           videoEl.muted = false; // PGM 播出解鎖聲音！
           const targetTime = (Number.isFinite(state.activeVideo.startTime) && state.activeVideo.startTime > 0)
             ? state.activeVideo.startTime

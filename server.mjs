@@ -12,6 +12,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { DeckStateMachine, DECK_ACTIONS } from './src/core/deck-state-machine.mjs';
 import { MediaPoolManager } from './src/core/media-pool-manager.mjs';
 import { PptComEngine } from './src/core/ppt-com-engine.mjs';
+import { Updater } from './src/core/updater.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +73,7 @@ export async function createPptStageServer({
     mockMode: mockPpt,
     targetDisplay
   });
+  const updater = new Updater({ projectRoot: __dirname });
 
   if (!fs.existsSync(keyVisualDir)) {
     fs.mkdirSync(keyVisualDir, { recursive: true });
@@ -317,6 +319,31 @@ export async function createPptStageServer({
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: err.message }));
         }
+      });
+      return;
+    }
+
+    // 檢查 GitHub 版本更新
+    if (pathname === '/api/check-update' && req.method === 'GET') {
+      const force = reqUrl.searchParams.get('force') === '1';
+      updater.checkUpdate({ force }).then((result) => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(result));
+      }).catch((err) => {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      });
+      return;
+    }
+
+    // 執行一鍵更新
+    if (pathname === '/api/perform-update' && req.method === 'POST') {
+      updater.performUpdate().then((result) => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(result));
+      }).catch((err) => {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
       });
       return;
     }

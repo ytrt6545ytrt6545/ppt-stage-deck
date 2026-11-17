@@ -40,6 +40,9 @@
         <button id="btnRefreshPools" type="button" class="btn-outline btn-sm" title="重新掃描素材目錄">重掃</button>
         <button id="btnStopVideo" type="button" class="btn btn-sm" style="display:none; background:#ef4444; border-color:#ef4444; color:#ffffff; font-weight:bold;">停止影片</button>
         <button id="btnBlackScreen" type="button" class="btn btn-black-mode">黑屏</button>
+        <div id="updateBadgeWrap" class="update-badge-wrap">
+          <button id="btnVersionBadge" type="button" class="btn-version-badge" title="目前版本 v1.0.0 (點擊檢查更新)">v1.0.0</button>
+        </div>
         <button id="btnShutdownAll" type="button" class="btn btn-sm" style="background:#dc2626; border-color:#dc2626; color:#ffffff; font-weight:bold;" title="結束系統並關閉所有投影放映">退出系統</button>
       </div>
     </header>
@@ -359,6 +362,48 @@
 
   <!-- 純播放專用背景音訊播放器 (不排進 PGM/PVW，背景直接播音) -->
   <audio id="bgAudioPlayer" preload="none" playsinline></audio>
+
+  <!-- 4. 版本更新彈出對話框 (Update Modal) -->
+  <div id="updateModal" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+    <div class="update-modal-dialog">
+      <div class="update-modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">🚀</span>
+          <h3 id="updateModalTitle" class="update-modal-title">軟體版本資訊</h3>
+        </div>
+        <button id="btnCloseUpdateModal" type="button" class="btn-close-modal" aria-label="關閉">✕</button>
+      </div>
+      <div class="update-modal-body">
+        <div class="update-version-row">
+          <div class="version-item">
+            <span class="version-label">目前本機版本</span>
+            <span id="currentVerText" class="version-val">v1.0.0</span>
+          </div>
+          <div class="version-arrow">➜</div>
+          <div class="version-item">
+            <span class="version-label">GitHub 最新發行</span>
+            <span id="latestVerText" class="version-val highlight">檢測中...</span>
+          </div>
+        </div>
+        
+        <div id="updateNotesSection" class="update-notes-section" style="display:none;">
+          <div class="update-notes-title">📋 最新更新日誌 (Release Notes)：</div>
+          <div id="updateNotesContent" class="update-notes-content"></div>
+        </div>
+
+        <div id="updateStatusMsg" class="update-status-msg" style="display:none;"></div>
+        <div id="updateProgressBar" class="update-progress-bar" style="display:none;">
+          <div class="update-progress-inner"></div>
+        </div>
+      </div>
+      <div class="update-modal-footer">
+        <button id="btnCheckUpdateManual" type="button" class="btn-outline btn-sm">🔄 重新檢查</button>
+        <a id="btnOpenGithubRelease" href="https://github.com/ytrt6545ytrt6545/ppt-stage-deck/releases" target="_blank" rel="noopener" class="btn-outline btn-sm" style="display:none; text-decoration:none;">🌐 前往 GitHub</a>
+        <button id="btnStartPerformUpdate" type="button" class="btn btn-sm btn-update-action" style="display:none; background:#10b981; border-color:#10b981; color:#fff; font-weight:bold;">⬇️ 一鍵立即更新</button>
+        <button id="btnDismissUpdateModal" type="button" class="btn-outline btn-sm">關閉</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/app.js"></script>
 </body>

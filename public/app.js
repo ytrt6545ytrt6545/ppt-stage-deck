@@ -2749,10 +2749,176 @@ function connectWs() {
   ws.addEventListener('close', () => setTimeout(connectWs, 1500));
 }
 
+// ============================================================================
+// 🚀 GitHub 自動更新與版本檢測模組 (Client-Side Update Sentinel)
+// ============================================================================
+
+function initUpdateSystem() {
+  const btnVersionBadge = document.getElementById('btnVersionBadge');
+  const updateModal = document.getElementById('updateModal');
+  const btnCloseUpdateModal = document.getElementById('btnCloseUpdateModal');
+  const btnDismissUpdateModal = document.getElementById('btnDismissUpdateModal');
+  const btnCheckUpdateManual = document.getElementById('btnCheckUpdateManual');
+  const btnStartPerformUpdate = document.getElementById('btnStartPerformUpdate');
+  const btnOpenGithubRelease = document.getElementById('btnOpenGithubRelease');
+  const currentVerText = document.getElementById('currentVerText');
+  const latestVerText = document.getElementById('latestVerText');
+  const updateNotesSection = document.getElementById('updateNotesSection');
+  const updateNotesContent = document.getElementById('updateNotesContent');
+  const updateStatusMsg = document.getElementById('updateStatusMsg');
+  const updateProgressBar = document.getElementById('updateProgressBar');
+
+  let currentCheckData = null;
+
+  function openModal() {
+    if (updateModal) updateModal.style.display = 'flex';
+  }
+
+  function closeModal() {
+    if (updateModal) updateModal.style.display = 'none';
+  }
+
+  async function checkUpdate(silent = false, force = false) {
+    if (!silent) {
+      openModal();
+      if (latestVerText) latestVerText.textContent = '檢測中...';
+      if (updateStatusMsg) {
+        updateStatusMsg.className = 'update-status-msg info';
+        updateStatusMsg.textContent = '正在向 GitHub 查詢最新版本...';
+        updateStatusMsg.style.display = 'block';
+      }
+      if (btnStartPerformUpdate) btnStartPerformUpdate.style.display = 'none';
+      if (updateNotesSection) updateNotesSection.style.display = 'none';
+    }
+
+    try {
+      const res = await fetch(`/api/check-update${force ? '?force=1' : ''}`);
+      const data = await res.json();
+      currentCheckData = data;
+
+      if (data && data.currentVersion) {
+        if (currentVerText) currentVerText.textContent = `v${data.currentVersion}`;
+      }
+
+      if (data && data.hasUpdate) {
+        // 發現新版本！
+        if (btnVersionBadge) {
+          btnVersionBadge.classList.add('has-update');
+          btnVersionBadge.textContent = `🟢 發現新版 v${data.latestVersion}`;
+          btnVersionBadge.title = `有新版本 v${data.latestVersion} 可更新！點擊開啟更新視窗`;
+        }
+
+        if (!silent) {
+          if (latestVerText) latestVerText.textContent = `v${data.latestVersion}`;
+          if (updateNotesContent && data.releaseNotes) {
+            updateNotesContent.textContent = data.releaseNotes;
+            if (updateNotesSection) updateNotesSection.style.display = 'block';
+          }
+          if (updateStatusMsg) {
+            updateStatusMsg.className = 'update-status-msg info';
+            updateStatusMsg.textContent = `🎉 發現最新版本 v${data.latestVersion}！點擊下方按鈕即可一鍵更新。`;
+            updateStatusMsg.style.display = 'block';
+          }
+          if (btnStartPerformUpdate) btnStartPerformUpdate.style.display = 'inline-flex';
+          if (btnOpenGithubRelease) {
+            btnOpenGithubRelease.href = data.releaseUrl || 'https://github.com/ytrt6545ytrt6545/ppt-stage-deck/releases';
+            btnOpenGithubRelease.style.display = 'inline-flex';
+          }
+        }
+      } else {
+        // 已是最新版
+        if (btnVersionBadge) {
+          btnVersionBadge.classList.remove('has-update');
+          btnVersionBadge.textContent = `v${data?.currentVersion || '1.0.0'}`;
+          btnVersionBadge.title = `目前版本 v${data?.currentVersion || '1.0.0'} (已是最新版)`;
+        }
+
+        if (!silent) {
+          const cur = data?.currentVersion || '1.0.0';
+          if (latestVerText) latestVerText.textContent = `v${data?.latestVersion || cur} (已是最新版)`;
+          if (updateStatusMsg) {
+            updateStatusMsg.className = 'update-status-msg success';
+            updateStatusMsg.textContent = '✅ 目前已是最新版本，系統運作正常。';
+            updateStatusMsg.style.display = 'block';
+          }
+          if (btnStartPerformUpdate) btnStartPerformUpdate.style.display = 'none';
+        }
+      }
+    } catch (err) {
+      if (!silent && updateStatusMsg) {
+        updateStatusMsg.className = 'update-status-msg error';
+        updateStatusMsg.textContent = `⚠️ 連線 GitHub 檢查失敗: ${err.message}`;
+        updateStatusMsg.style.display = 'block';
+      }
+    }
+  }
+
+  async function performUpdate() {
+    if (!btnStartPerformUpdate) return;
+    btnStartPerformUpdate.disabled = true;
+    if (btnCheckUpdateManual) btnCheckUpdateManual.disabled = true;
+    if (updateProgressBar) updateProgressBar.style.display = 'block';
+    if (updateStatusMsg) {
+      updateStatusMsg.className = 'update-status-msg info';
+      updateStatusMsg.textContent = '🚀 正在下載最新更新包並熱覆蓋核心檔案，請勿關閉視窗...';
+      updateStatusMsg.style.display = 'block';
+    }
+
+    try {
+      const res = await fetch('/api/perform-update', { method: 'POST' });
+      const data = await res.json();
+      if (updateProgressBar) updateProgressBar.style.display = 'none';
+
+      if (data && data.ok) {
+        if (updateStatusMsg) {
+          updateStatusMsg.className = 'update-status-msg success';
+          updateStatusMsg.textContent = `✅ ${data.message || '更新完成！將在 3 秒後自動重新整理主控台...'}`;
+          updateStatusMsg.style.display = 'block';
+        }
+        btnStartPerformUpdate.style.display = 'none';
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        if (updateStatusMsg) {
+          updateStatusMsg.className = 'update-status-msg error';
+          updateStatusMsg.textContent = `❌ 更新失敗: ${data?.error || '發生未知錯誤'}`;
+          updateStatusMsg.style.display = 'block';
+        }
+        btnStartPerformUpdate.disabled = false;
+        if (btnCheckUpdateManual) btnCheckUpdateManual.disabled = false;
+      }
+    } catch (err) {
+      if (updateProgressBar) updateProgressBar.style.display = 'none';
+      if (updateStatusMsg) {
+        updateStatusMsg.className = 'update-status-msg error';
+        updateStatusMsg.textContent = `❌ 更新請求發生錯誤: ${err.message}`;
+        updateStatusMsg.style.display = 'block';
+      }
+      btnStartPerformUpdate.disabled = false;
+      if (btnCheckUpdateManual) btnCheckUpdateManual.disabled = false;
+    }
+  }
+
+  // 事件監聽綁定
+  btnVersionBadge?.addEventListener('click', () => checkUpdate(false, false));
+  btnCheckUpdateManual?.addEventListener('click', () => checkUpdate(false, true));
+  btnStartPerformUpdate?.addEventListener('click', performUpdate);
+  btnCloseUpdateModal?.addEventListener('click', closeModal);
+  btnDismissUpdateModal?.addEventListener('click', closeModal);
+  updateModal?.addEventListener('click', (e) => {
+    if (e.target === updateModal) closeModal();
+  });
+
+  // 開機後延遲 1.5 秒執行靜默檢查
+  setTimeout(() => checkUpdate(true, false), 1500);
+}
+
 // 啟動入口
 window.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   initPopoutSystem();
+  initUpdateSystem();
   connectWs();
   fetch('/api/state')
     .then((r) => r.json())
