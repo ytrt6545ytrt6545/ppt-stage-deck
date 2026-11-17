@@ -1,10 +1,36 @@
+# ============================================================================
+# 🙈 Git 忽略清單 (.gitignore) - PPT Stage Deck
+# ============================================================================
+
+# 依賴套件與打包產物
 node_modules/
-assets/videos/*.mp4
-assets/videos/*.mov
-assets/videos/*.mkv
-assets/previews/
+dist/
+runtime/
+node.exe
+
+# 測試暫存與快照日誌
 *.log
 .env
-
-
 .tmp_cdp_profile/
+scratch/
+artifacts/
+
+# 使用者私有素材排除（保留資料夾結構，排除大型簡報與多媒體）
+assets/slides/*
+!assets/slides/.gitkeep
+assets/videos/*
+!assets/videos/.gitkeep
+assets/images/*
+!assets/images/.gitkeep
+assets/audios/*
+!assets/audios/.gitkeep
+assets/previews/*
+!assets/previews/.gitkeep
+assets/key-visual/*
+!assets/key-visual/.gitkeep
+
+# 測試夾具中的大檔案影音排除
+test/fixtures/videos/*.mp4
+test/fixtures/videos/*.mov
+test/fixtures/videos/*.mkv
+test/fixtures/videos/*.avi

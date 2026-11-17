@@ -15,23 +15,64 @@
       color: #ffffff;
       user-select: none;
       cursor: none;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
     }
-    #stageSlideImg {
+    #stageKeyVisualImg {
+      position: fixed;
+      inset: 0;
       width: 100vw;
       height: 100vh;
-      object-fit: contain;
-      display: block;
+      object-fit: cover !important;
+      object-position: center center !important;
       background-color: #000000;
+      display: none;
+      z-index: 5;
+    }
+    #stageSlideImg {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain !important;
+      object-position: center center !important;
+      margin: auto !important;
+      display: none;
+      background-color: transparent;
+      z-index: 10;
+    }
+    #stageImage {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain !important;
+      object-position: center center !important;
+      margin: auto !important;
+      display: none;
+      background-color: transparent;
+      z-index: 15;
     }
     #stageVideo {
       position: fixed;
       inset: 0;
       width: 100vw;
       height: 100vh;
-      object-fit: contain;
+      object-fit: cover !important;
+      object-position: center center !important;
       background-color: #000000;
       display: none;
       z-index: 20;
+    }
+    #stageAudio {
+      position: fixed;
+      display: none;
+      z-index: 1;
     }
     #blackCurtain {
       position: fixed;
@@ -45,18 +86,26 @@
   </style>
 </head>
 <body>
-  <img id="stageSlideImg" src="" alt="" />
+  <img id="stageKeyVisualImg" src="" alt="主視覺底圖" />
+  <img id="stageSlideImg" src="" alt="簡報放映" />
+  <img id="stageImage" src="" alt="圖片展示" />
   <video id="stageVideo" playsinline></video>
+  <audio id="stageAudio"></audio>
   <div id="blackCurtain"></div>
 
   <script type="module">
+    const kvImg = document.getElementById('stageKeyVisualImg');
     const slideImg = document.getElementById('stageSlideImg');
+    const stageImage = document.getElementById('stageImage');
     const videoEl = document.getElementById('stageVideo');
+    const audioEl = document.getElementById('stageAudio');
     const blackCurtain = document.getElementById('blackCurtain');
     let currentVideoUrl = null;
+    let currentAudioUrl = null;
 
-    async function notifyVideoEnded() {
+    async function notifyMediaEnded() {
       currentVideoUrl = null;
+      currentAudioUrl = null;
       videoEl.style.display = 'none';
       try {
         await fetch('/api/action', {
@@ -67,7 +116,8 @@
       } catch {}
     }
 
-    videoEl.addEventListener('ended', notifyVideoEnded);
+    videoEl.addEventListener('ended', notifyMediaEnded);
+    audioEl.addEventListener('ended', notifyMediaEnded);
 
     function applyStageState(state) {
       if (!state) return;
@@ -79,33 +129,115 @@
         blackCurtain.style.display = 'none';
       }
 
-      // 2. 投影片基底畫面
-      if (state.pgm && state.pgm.previewUrl) {
-        slideImg.src = state.pgm.previewUrl;
+      // 2. 主視覺底圖 (最底層，無 PPT、影片或圖片時透出)
+      if (state.keyVisualUrl) {
+        if (kvImg.src !== window.location.origin + state.keyVisualUrl && kvImg.getAttribute('src') !== state.keyVisualUrl) {
+          kvImg.src = state.keyVisualUrl;
+        }
+        kvImg.style.display = 'block';
+      } else {
+        kvImg.style.display = 'none';
       }
 
-      // 3. 影片全螢幕零雜訊覆蓋播放 (對標 amrtf-desk 前行影片 + 防 Autoplay 阻斷雙軌啟動)
+      // 3. 投影片畫面 (疊在主視覺上方；若在 KV/image/video 模式或無 PPT 時隱藏)
+      const hasPpt = !!(state.pgm && state.pgm.deckId && state.pgm.previewUrl);
+      if (hasPpt && state.outputMode === 'ppt') {
+        if (slideImg.src !== window.location.origin + state.pgm.previewUrl && slideImg.getAttribute('src') !== state.pgm.previewUrl) {
+          slideImg.src = state.pgm.previewUrl;
+        }
+        slideImg.style.display = 'block';
+      } else {
+        slideImg.style.display = 'none';
+      }
+
+      // 4. 靜態圖片展示 (outputMode === 'image')
+      const activeImg = (state.activeMedia && state.activeMedia.type === 'image') ? state.activeMedia : null;
+      if (state.outputMode === 'image' && activeImg && activeImg.url) {
+        if (stageImage.src !== window.location.origin + activeImg.url && stageImage.getAttribute('src') !== activeImg.url) {
+          stageImage.src = activeImg.url;
+        }
+        stageImage.style.display = 'block';
+      } else {
+        stageImage.style.display = 'none';
+      }
+
+      // 5. 影片全螢幕零雜訊覆蓋播放 (支援從指定秒數起播與原地暫停/續播)
       if (state.outputMode === 'video' && state.activeVideo && state.activeVideo.url) {
         videoEl.style.display = 'block';
         if (currentVideoUrl !== state.activeVideo.url) {
           currentVideoUrl = state.activeVideo.url;
-          videoEl.src = currentVideoUrl;
-          videoEl.muted = false;
-          const playPromise = videoEl.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(() => {
-              videoEl.muted = true;
-              videoEl.play().catch(() => {});
-            });
+          const sep = currentVideoUrl.includes('?') ? '&' : '?';
+          videoEl.preload = 'auto';
+          videoEl.src = `${currentVideoUrl}${sep}slot=stage`;
+          videoEl.muted = false; // PGM 播出解鎖聲音！
+          const targetTime = (Number.isFinite(state.activeVideo.startTime) && state.activeVideo.startTime > 0)
+            ? state.activeVideo.startTime
+            : 0;
+          if (targetTime > 0) {
+            try { videoEl.currentTime = targetTime; } catch {}
+            videoEl.addEventListener('loadedmetadata', () => {
+              try { videoEl.currentTime = targetTime; } catch {}
+            }, { once: true });
+          }
+          const ensureStagePlay = () => {
+            if (currentVideoUrl !== state.activeVideo.url || state.activeVideo.isPaused) return;
+            const playPromise = videoEl.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => {
+                videoEl.muted = true;
+                videoEl.play().catch(() => {});
+              });
+            }
+          };
+          if (state.activeVideo.isPaused) {
+            videoEl.pause();
+          } else {
+            ensureStagePlay();
+            videoEl.addEventListener('loadeddata', ensureStagePlay, { once: true });
+            videoEl.addEventListener('canplay', ensureStagePlay, { once: true });
+          }
+        } else {
+          // 同一隻影片在 PGM 播放中：精確同步原地暫停、續播與進度跳轉
+          if (Number.isFinite(state.activeVideo.currentTime)) {
+            if (Math.abs(videoEl.currentTime - state.activeVideo.currentTime) > 1.2) {
+              try { videoEl.currentTime = state.activeVideo.currentTime; } catch {}
+            }
+          }
+          if (state.activeVideo.isPaused) {
+            videoEl.pause();
+          } else if (videoEl.paused) {
+            videoEl.play().catch(() => {});
           }
         }
       } else {
         if (currentVideoUrl) {
           videoEl.pause();
+          videoEl.preload = 'none';
           videoEl.removeAttribute('src');
+          try { videoEl.load(); } catch {}
           currentVideoUrl = null;
         }
         videoEl.style.display = 'none';
+      }
+
+      // 6. 音訊播放 (outputMode === 'audio'，畫面透出底層主視覺)
+      const activeAudio = (state.activeMedia && state.activeMedia.type === 'audio') ? state.activeMedia : null;
+      if (state.outputMode === 'audio' && activeAudio && activeAudio.url) {
+        if (currentAudioUrl !== activeAudio.url) {
+          currentAudioUrl = activeAudio.url;
+          audioEl.src = currentAudioUrl;
+          audioEl.muted = false;
+          if (Number.isFinite(activeAudio.startTime) && activeAudio.startTime > 0) {
+            try { audioEl.currentTime = activeAudio.startTime; } catch {}
+          }
+          audioEl.play().catch(() => {});
+        }
+      } else {
+        if (currentAudioUrl) {
+          audioEl.pause();
+          audioEl.removeAttribute('src');
+          currentAudioUrl = null;
+        }
       }
     }
 
@@ -115,6 +247,10 @@
       ws.addEventListener('message', (ev) => {
         try {
           const msg = JSON.parse(ev.data);
+          if (msg.type === 'SHUTDOWN') {
+            window.close();
+            return;
+          }
           if (msg.type === 'STATE_UPDATE' && msg.data) {
             applyStageState(msg.data);
           }
@@ -122,6 +258,60 @@
       });
       ws.addEventListener('close', () => setTimeout(connectWs, 1500));
     }
+
+    // 雙擊切換 fill 與 cover
+    const fitModes = ['fill', 'cover', 'contain'];
+    let currentFitIdx = 0;
+    window.addEventListener('dblclick', () => {
+      currentFitIdx = (currentFitIdx + 1) % fitModes.length;
+      const newFit = fitModes[currentFitIdx];
+      videoEl.style.objectFit = newFit;
+      slideImg.style.objectFit = newFit;
+      stageImage.style.objectFit = newFit;
+    });
+
+    // 支援焦點在第二螢幕放映艙時，按鍵盤或簡報筆同樣可推進 PPT 下一頁/上一頁/黑屏
+    let stageKeyChain = Promise.resolve();
+    function postStageAction(action) {
+      stageKeyChain = stageKeyChain.then(() =>
+        fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        })
+      ).catch(() => {});
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const key = e.key;
+      if (
+        key === 'PageDown' ||
+        key === 'ArrowRight' ||
+        key === 'ArrowDown' ||
+        key === ' ' ||
+        key === 'Spacebar' ||
+        key === 'Enter' ||
+        key === 'n' ||
+        key === 'N'
+      ) {
+        e.preventDefault();
+        postStageAction('PGM_NEXT');
+      } else if (
+        key === 'PageUp' ||
+        key === 'ArrowLeft' ||
+        key === 'ArrowUp' ||
+        key === 'Backspace' ||
+        key === 'p' ||
+        key === 'P'
+      ) {
+        e.preventDefault();
+        postStageAction('PGM_PREV');
+      } else if (key === '.' || key === 'b' || key === 'B') {
+        e.preventDefault();
+        postStageAction('TOGGLE_BLACK');
+      }
+    }, { capture: true });
 
     fetch('/api/state')
       .then((r) => r.json())
@@ -131,4 +321,3 @@
   </script>
 </body>
 </html>
-

@@ -52,7 +52,7 @@ async function waitForCondition(fn, timeoutMs = 8000, intervalMs = 120) {
     try {
       const val = await fn();
       if (val) return val;
-    } catch {}
+    } catch { }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   return null;
@@ -101,12 +101,30 @@ class CdpSession {
   }
 
   close() {
-    try { this.ws.close(); } catch {}
+    try { this.ws.close(); } catch { }
   }
 }
 
 test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動畫 + /stage 影片起播 + 雙螢幕截圖閉環', async () => {
-  const appServer = await createPptStageServer({ port: 0, mockPpt: false });
+  const e2eSlidesDir = path.join(os.tmpdir(), `ppt-e2e-slides-${Date.now()}`);
+  const e2eVideosDir = path.join(os.tmpdir(), `ppt-e2e-videos-${Date.now()}`);
+  fs.mkdirSync(e2eSlidesDir, { recursive: true });
+  fs.mkdirSync(e2eVideosDir, { recursive: true });
+  const fixtureSlidesDir = path.join(projectRoot, 'test', 'fixtures', 'slides');
+  const srcSlidesDir = fs.existsSync(fixtureSlidesDir) ? fixtureSlidesDir : path.join(projectRoot, 'assets', 'slides');
+  for (const f of ['01_主講簡報_廣海明月導論.pptx', '02_互動提問與公告簡報.pptx']) {
+    if (fs.existsSync(path.join(srcSlidesDir, f))) {
+      fs.copyFileSync(path.join(srcSlidesDir, f), path.join(e2eSlidesDir, f));
+    }
+  }
+  const fixtureVideosDir = path.join(projectRoot, 'test', 'fixtures', 'videos');
+  const srcVideosDir = fs.existsSync(fixtureVideosDir) ? fixtureVideosDir : path.join(projectRoot, 'assets', 'videos');
+  for (const f of ['01_前行緣念.mp4', '02_大迴向.mp4']) {
+    if (fs.existsSync(path.join(srcVideosDir, f))) {
+      fs.copyFileSync(path.join(srcVideosDir, f), path.join(e2eVideosDir, f));
+    }
+  }
+  const appServer = await createPptStageServer({ port: 0, mockPpt: false, slidesDir: e2eSlidesDir, videosDir: e2eVideosDir });
   const baseUrl = `http://127.0.0.1:${appServer.port}`;
   const debugPort = 19400 + Math.floor(Math.random() * 400);
   const userDataDir = path.join(os.tmpdir(), `ppt-stage-cdp-${Date.now()}`);
@@ -151,13 +169,44 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
           bounds: { left: 40, top: 40, width: 1200, height: 760, windowState: 'normal' }
         });
       }
-    } catch {}
+    } catch { }
     await deskCdp.send('Page.enable');
     await deskCdp.send('Runtime.enable');
+    deskCdp.ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.method === 'Runtime.exceptionThrown') {
+          console.error('BROWSER EXCEPTION:', msg.params?.exceptionDetails?.text, msg.params?.exceptionDetails?.exception?.description);
+        }
+      } catch { }
+    });
     await stageCdp.send('Page.enable');
     await stageCdp.send('Runtime.enable');
 
-    // 1. 等待 PPT 池、影片池與 4 張預覽縮圖真實載入完成 (naturalWidth > 0)
+    // 0. (長官鐵律) 驗證開機預設為純淨雙空槽 (STANDBY)，PGM 與 PVW 無任何素材自動預載
+    const initSlotsEmpty = await waitForCondition(async () => {
+      return await deskCdp.eval(`(() => {
+        const pgmTitle = document.getElementById('pgmDeckTitle')?.textContent || '';
+        const pvwTitle = document.getElementById('pvwDeckTitle')?.textContent || '';
+        return (pgmTitle.includes('空槽') || pgmTitle.includes('主視覺')) && pvwTitle.includes('空槽');
+      })()`);
+    }, 5000);
+    assert.equal(initSlotsEmpty, true, '開機冷啟動預設 PGM 與 PVW 必須 100% 為空槽待命 (STANDBY)，無素材自動預載');
+
+    // 1. 導播從流程隊列手動將 PPT-1「直接播出」與 PPT-2「送至預覽」
+    await deskCdp.send('Page.bringToFront');
+    await waitForCondition(async () => {
+      return await deskCdp.eval(`Boolean(document.querySelector('#scheduleQueueList .btn-load-pgm-universal[data-type="ppt"]'))`);
+    }, 5000);
+    await deskCdp.eval(`(() => {
+      const pgmBtns = document.querySelectorAll('#scheduleQueueList .btn-load-pgm-universal[data-type="ppt"]');
+      const pvwBtns = document.querySelectorAll('#scheduleQueueList .btn-load-pvw-universal[data-type="ppt"]');
+      if (pgmBtns[0]) pgmBtns[0].click();
+      const targetBtn = pvwBtns.length > 1 ? pvwBtns[1] : pvwBtns[0];
+      if (targetBtn) targetBtn.click();
+    })()`);
+
+    // 等待 PPT 池、影片池與 4 張預覽縮圖真實載入完成 (naturalWidth > 0)
     const imagesLoaded = await waitForCondition(async () => {
       return await deskCdp.eval(`(() => {
         const pptItems = document.querySelectorAll('#pptPoolList .pool-item').length;
@@ -169,8 +218,8 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
         });
         return pptItems >= 2 && vidItems >= 2 && allImgsOk;
       })()`);
-    }, 10000);
-    assert.equal(imagesLoaded, true, '主控台 4 張投影片預覽縮圖必須全部真實載入 (naturalWidth > 0)');
+    }, 25000);
+    assert.equal(imagesLoaded, true, '手動將簡報送入 PGM/PVW 後，主控台 4 張投影片預覽縮圖必須全部真實載入 (naturalWidth > 0)');
 
     // 2. 驗證實體視窗幾何與 Material LIFF 風格計算樣式
     const geomAndStyle = await deskCdp.eval(`(() => {
@@ -197,6 +246,69 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     assert.equal(geomAndStyle.cardBg, 'rgb(255, 255, 255)');
     assert.equal(geomAndStyle.cardRadius, '16px');
     assert.equal(geomAndStyle.btnBg, 'rgb(14, 165, 233)');
+
+    // 2-A2. 驗證介面縮放 (80% / 90% / 100% / 110%) 切換與右下角播控艙零裁切 (rect.bottom <= innerHeight)
+    const scaleAndDockCheck = await deskCdp.eval(`(() => {
+      const btn80 = document.querySelector('#uiScaleControl .btn-scale-opt[data-scale="0.8"]');
+      const btn90 = document.querySelector('#uiScaleControl .btn-scale-opt[data-scale="0.9"]');
+      const btn110 = document.querySelector('#uiScaleControl .btn-scale-opt[data-scale="1.1"]');
+      const btn100 = document.querySelector('#uiScaleControl .btn-scale-opt[data-scale="1"]');
+      if (!btn80 || !btn90 || !btn110 || !btn100) return { ok: false };
+
+      btn80.click();
+      const font80 = getComputedStyle(document.body).fontSize;
+      btn110.click();
+      const font110 = getComputedStyle(document.body).fontSize;
+      btn90.click();
+      const font90 = getComputedStyle(document.body).fontSize;
+      btn100.click();
+      const font100 = getComputedStyle(document.body).fontSize;
+
+      const dockBtn = document.getElementById('btnDeskMasterCutLive');
+      const dockRect = dockBtn ? dockBtn.getBoundingClientRect() : null;
+      return {
+        ok: true,
+        font80,
+        font90,
+        font100,
+        font110,
+        dockBottom: dockRect ? dockRect.bottom : 9999,
+        innerHeight: window.innerHeight
+      };
+    })()`);
+    assert.equal(scaleAndDockCheck.ok, true, '必須存在 80% / 90% / 100% / 110% 介面縮放按鈕');
+    assert.notEqual(scaleAndDockCheck.font80, scaleAndDockCheck.font100, '切換 80% 與 100% 時計算字級必須實質突變 (Δ ≠ 0)');
+    assert.notEqual(scaleAndDockCheck.font90, scaleAndDockCheck.font110, '切換 90% 與 110% 時計算字級必須實質突變 (Δ ≠ 0)');
+    assert.ok(
+      scaleAndDockCheck.dockBottom <= scaleAndDockCheck.innerHeight,
+      `右下角影片播控艙按鈕嚴禁超出視窗底部被裁切 (dockBottom=${scaleAndDockCheck.dockBottom}, innerHeight=${scaleAndDockCheck.innerHeight})`
+    );
+
+    // 2-B. [方案 1] 驗證左側垂直主分隔條與右上水平分隔條幾何正常與綜合素材池閉環
+    const splittersGeom = await deskCdp.eval(`(() => {
+      const hSplitter = document.getElementById('horizontalSplitter');
+      const mainVSplitter = document.getElementById('mainVerticalSplitter');
+      const allMediaItems = document.querySelectorAll('#allMediaPoolList .pool-item').length;
+      const flowItems = document.querySelectorAll('#scheduleQueueList .pool-item').length;
+      const hRect = hSplitter ? hSplitter.getBoundingClientRect() : null;
+      const vRect = mainVSplitter ? mainVSplitter.getBoundingClientRect() : null;
+      return {
+        hasH: !!hSplitter,
+        hW: hRect ? hRect.width : 0,
+        hH: hRect ? hRect.height : 0,
+        hasV: !!mainVSplitter,
+        vW: vRect ? vRect.width : 0,
+        vH: vRect ? vRect.height : 0,
+        allMediaItems,
+        flowItems
+      };
+    })()`);
+    assert.equal(splittersGeom.hasH, true, '主控台必須存在右上雙監視器水平分隔條');
+    assert.ok(splittersGeom.hW > 400 && splittersGeom.hH >= 6, '水平分隔條幾何尺寸必須有效');
+    assert.equal(splittersGeom.hasV, true, '主控台必須存在左流程與右工作區垂直主分隔條');
+    assert.ok(splittersGeom.vW >= 6 && splittersGeom.vH > 300, '垂直主分隔條幾何尺寸必須有效');
+    assert.ok(splittersGeom.allMediaItems >= 3, '綜合素材池必須成功收納 PPT 與影片');
+    assert.ok(splittersGeom.flowItems >= 3, '現場流程隊列必須成功排程');
 
     // 3. 驗證第二螢幕原生 PowerPoint screenClass 視窗真實渲染、絕非死白畫面，且 WindowFromPoint 確為 PGM 置頂
     const artifactsDir = path.join(projectRoot, 'artifacts');
@@ -242,6 +354,31 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     }, 5000);
     assert.equal(step2Page, '2 / 3', '頁內動畫播畢後再按「下一頁」必須推進至第 2 / 3 頁');
 
+    // 4-B. 驗證翻至第 2 頁時動畫重置為 0 / 1 (GotoSlide ResetSlide=-1)，且按簡報筆 / 鍵盤 (PageDown / PageUp) 可逐個推進動畫與跨頁
+    const slide2InitAnim = await deskCdp.eval(`document.getElementById('pgmAnimBadge').textContent`);
+    assert.equal(slide2InitAnim, '動畫 0 / 1', '翻至第 2 頁時，動畫必須重置為 0 / 1，不可一次全部出來');
+
+    await deskCdp.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }))`);
+    const slide2Step1ByRemote = await waitForCondition(async () => {
+      const t = await deskCdp.eval(`document.getElementById('pgmAnimBadge').textContent`);
+      return t === '動畫 1 / 1' ? t : null;
+    }, 5000);
+    assert.equal(slide2Step1ByRemote, '動畫 1 / 1', '按下簡報筆 / 鍵盤 PageDown 第 1 下必須推進第 2 頁動畫至 1 / 1');
+
+    await deskCdp.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }))`);
+    const step3ByRemote = await waitForCondition(async () => {
+      const p = await deskCdp.eval(`document.getElementById('pgmPageBadge').textContent`);
+      return p === '3 / 3' ? p : null;
+    }, 5000);
+    assert.equal(step3ByRemote, '3 / 3', '按下簡報筆 / 鍵盤 PageDown 第 2 下必須推進 PGM 至第 3 / 3 頁');
+
+    await deskCdp.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true, cancelable: true }))`);
+    const backTo2ByRemote = await waitForCondition(async () => {
+      const p = await deskCdp.eval(`document.getElementById('pgmPageBadge').textContent`);
+      return p === '2 / 3' ? p : null;
+    }, 5000);
+    assert.equal(backTo2ByRemote, '2 / 3', '按下簡報筆 / 鍵盤 PageUp 必須回退 PGM 至第 2 / 3 頁');
+
     // 點擊 #btnPgmPrev 驗證上一頁回退
     await deskCdp.eval(`document.getElementById('btnPgmPrev').click()`);
     await new Promise((r) => setTimeout(r, 300));
@@ -276,7 +413,76 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
       `點擊 CUT 無縫切換後，第二螢幕正中央實際最上層視窗 (WindowFromPoint) 必須切換為新 PGM 視窗 (top=${cap2.topCenterHwnd} [${cap2.topCenterClass}: ${cap2.topCenterTitle}], pgm=${stateAfterCut.pgm.hwnd}, pvw=${stateAfterCut.pvw.hwnd})`
     );
 
-    // 6. 真實點擊影片池「▶ 全螢幕播放」，驗證 /stage 放映艙 <video> 實際載入並播放，再按停止切回 PPT
+    // 6. 真實測試「第一次 PPT 與影片 CUT 交換」：先送影片至 PVW，按 CUT 切換，驗證第一次即刻出畫面且無 screenClass 遮擋，再按 CUT 換回 PPT
+    await stageCdp.send('Page.bringToFront');
+    await deskCdp.eval(`document.querySelector('.btn-pvw-video').click()`);
+    await new Promise((r) => setTimeout(r, 250));
+    await deskCdp.eval(`document.getElementById('btnCutSwap').click()`);
+
+    const firstCutStagePlaying = await waitForCondition(async () => {
+      return await stageCdp.eval(`(() => {
+        const v = document.getElementById('stageVideo');
+        return v && getComputedStyle(v).display === 'block' && v.readyState >= 2 && v.videoWidth > 0 && !v.paused;
+      })()`);
+    }, 8000);
+    assert.equal(firstCutStagePlaying, true, '第一次 PPT 與影片 CUT 交換時，第二螢幕 /stage 必須立即出現影片畫面並起播');
+
+    // 驗證頂部導航列的 screenBadge 與 outputModeBadge 已依方案 A 徹底隱藏 (display === 'none')
+    const topBadgesHidden = await deskCdp.eval(`(() => {
+      const sb = document.getElementById('screenBadge');
+      const ob = document.getElementById('outputModeBadge');
+      return sb && ob && getComputedStyle(sb).display === 'none' && getComputedStyle(ob).display === 'none';
+    })()`);
+    assert.equal(topBadgesHidden, true, '頂部導航列 #screenBadge 與 #outputModeBadge 必須徹底隱藏 (display: none)');
+
+    await deskCdp.send('Page.bringToFront');
+    const firstCutPgmPlaying = await waitForCondition(async () => {
+      return await deskCdp.eval(`(() => {
+        const v = document.getElementById('pgmVideoPlayer');
+        return v && getComputedStyle(v).display === 'block' && v.readyState >= 2 && v.videoWidth > 0 && !v.paused;
+      })()`);
+    }, 5000);
+    assert.equal(firstCutPgmPlaying, true, '第一次 PPT 與影片 CUT 交換時，主控台 PGM 監視器必須同步出現影片畫面並起播');
+
+    // 驗證此時退回 PVW 的 PPT 預覽圖依然清晰可見，且絕非 _live_pvw.png 全黑畫面
+    const pvwPptPreviewDuringVideo = await deskCdp.eval(`(() => {
+      const img = document.getElementById('pvwPreviewImg');
+      if (!img || getComputedStyle(img).display === 'none' || !img.complete || img.naturalWidth === 0) return { ok: false };
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 36;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 64, 36);
+      const data = ctx.getImageData(0, 0, 64, 36).data;
+      let nonBlackPixels = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 15 || data[i + 1] > 15 || data[i + 2] > 15) nonBlackPixels++;
+      }
+      return { ok: nonBlackPixels > 50, src: img.getAttribute('src'), nonBlackPixels };
+    })()`);
+    assert.equal(
+      pvwPptPreviewDuringVideo.ok,
+      true,
+      `PPT 退回 PVW 預覽待命時，右上角 PVW 預覽大圖必須清晰顯示投影片內容，嚴禁黑屏 (src=${pvwPptPreviewDuringVideo.src}, nonBlackPixels=${pvwPptPreviewDuringVideo.nonBlackPixels})`
+    );
+
+    const capDuringVideo = await appServer.pptEngine.captureStage(path.join(artifactsDir, 'e2e-screen2-video-cut.png'));
+    assert.notEqual(
+      capDuringVideo.topCenterClass,
+      'screenClass',
+      `PPT 與影片 CUT 交換後，PowerPoint screenClass 視窗必須徹底隱藏，不得殘留遮擋第二螢幕影片 (topCenterClass=${capDuringVideo.topCenterClass})`
+    );
+
+    // 再次按下 CUT 切換：將 PPT 換回 PGM、影片退回 PVW
+    await deskCdp.eval(`document.getElementById('btnCutSwap').click()`);
+    const cutBackToPpt = await waitForCondition(async () => {
+      const badgeText = await deskCdp.eval(`document.getElementById('outputModeBadge').textContent`);
+      const pvwVidShown = await deskCdp.eval(`getComputedStyle(document.getElementById('pvwVideoPlayer')).display === 'block'`);
+      return badgeText.includes('PPT 播出中') && pvwVidShown;
+    }, 5000);
+    assert.equal(cutBackToPpt, true, '再次按 CUT 切換後，PPT 必須回到 PGM 播出且影片退回 PVW 預覽');
+
+    // 6-B. 真實點擊影片池「▶ 全螢幕播放」，驗證 /stage 放映艙 <video> 實際載入並播放，再按停止切回 PPT
     await stageCdp.send('Page.bringToFront');
     await deskCdp.eval(`document.querySelector('.btn-play-video').click()`);
     const videoPlayingOnStage = await waitForCondition(async () => {
@@ -304,8 +510,11 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
       return await stageCdp.eval(`getComputedStyle(document.getElementById('blackCurtain')).display === 'block'`);
     }, 4000);
     assert.equal(blackCurtainShown, true, '點擊黑屏後，/stage 黑幕必須立即顯示');
-    const blackBgAfter = await deskCdp.eval(`getComputedStyle(document.getElementById('btnBlackScreen')).backgroundColor`);
-    assert.notEqual(blackBgBefore, blackBgAfter, '黑屏按鈕計算樣式背景色必須實質突變 (Δ ≠ 0)');
+    const blackBgAfter = await waitForCondition(async () => {
+      const bg = await deskCdp.eval(`getComputedStyle(document.getElementById('btnBlackScreen')).backgroundColor`);
+      return bg !== blackBgBefore ? bg : null;
+    }, 4000);
+    assert.ok(blackBgAfter, '黑屏按鈕計算樣式背景色必須實質突變 (Δ ≠ 0)');
 
     // 解除黑屏並留存最終主控台與第二螢幕恢復快照
     await deskCdp.eval(`document.getElementById('btnBlackScreen').click()`);
@@ -325,11 +534,29 @@ test('[Live-Reality-E2E] 真機 PowerPoint COM 雙簡報無縫切換 + 頁內動
     const shotPath = path.join(artifactsDir, 'e2e-ppt-stage-deck-live.png');
     fs.writeFileSync(shotPath, Buffer.from(shot.data, 'base64'));
     assert.equal(fs.existsSync(shotPath), true);
+
+    // 8. 驗證右下角「📑 PPT 快選與修改」分頁切換、縮圖點擊跳頁與網頁讀取投影片文字
+    await deskCdp.eval(`document.getElementById('dockTabBtnPpt').click()`);
+    const pptTabCheck = await waitForCondition(async () => {
+      return await deskCdp.eval(`(() => {
+        const pane = document.getElementById('dockPanePpt');
+        const thumbs = document.querySelectorAll('#pptSlideThumbStrip .ppt-thumb-item');
+        return pane && getComputedStyle(pane).display !== 'none' && thumbs.length >= 2 ? thumbs.length : null;
+      })()`);
+    }, 4000);
+    assert.ok(pptTabCheck >= 2, '切換至「📑 PPT 快選與修改」分頁後，必須顯示當前簡報各頁縮圖');
+
+    const shotPptTab = await deskCdp.send('Page.captureScreenshot', { format: 'png' });
+    const shotPptTabPath = path.join(artifactsDir, 'e2e-ppt-stage-deck-ppt-tab.png');
+    fs.writeFileSync(shotPptTabPath, Buffer.from(shotPptTab.data, 'base64'));
+    assert.equal(fs.existsSync(shotPptTabPath), true);
   } finally {
     if (deskCdp) deskCdp.close();
     if (stageCdp) stageCdp.close();
-    try { browserProc.kill(); } catch {}
+    try { browserProc.kill(); } catch { }
     await appServer.close();
-    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch { }
+    try { fs.rmSync(e2eSlidesDir, { recursive: true, force: true }); } catch { }
+    try { fs.rmSync(e2eVideosDir, { recursive: true, force: true }); } catch { }
   }
 });

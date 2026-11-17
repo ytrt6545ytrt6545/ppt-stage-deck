@@ -8,9 +8,10 @@ import path from 'path';
 import readline from 'readline';
 
 export class PptComEngine {
-  constructor({ workerScriptPath, mockMode = false } = {}) {
+  constructor({ workerScriptPath, mockMode = false, targetDisplay = process.env.TARGET_DISPLAY || '' } = {}) {
     this.workerScriptPath = workerScriptPath;
     this.mockMode = mockMode;
+    this.targetDisplay = targetDisplay;
     this.proc = null;
     this.reqSeq = 0;
     this.pending = new Map();
@@ -32,13 +33,24 @@ export class PptComEngine {
     if (this.readyPromise) return this.readyPromise;
 
     this.readyPromise = new Promise((resolve) => {
+      const childEnv = { ...process.env };
+      if (this.targetDisplay) {
+        childEnv.TARGET_DISPLAY = this.targetDisplay;
+      }
+
       this.proc = spawn('powershell.exe', [
         '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', this.workerScriptPath
       ], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        env: childEnv
+      });
+
+      this.proc.stderr?.on('data', (d) => {
+        const errText = d.toString('utf8').trim();
+        if (errText) console.error('[PptComEngine Worker Error]', errText);
       });
 
       const rl = readline.createInterface({ input: this.proc.stdout });
@@ -110,15 +122,15 @@ export class PptComEngine {
   }
 
   async scanAndExport({ slidesDir, previewsDir }) {
-    return this.sendCommand('SCAN_AND_EXPORT', { slidesDir, previewsDir }, 30000);
+    return this.sendCommand('SCAN_AND_EXPORT', { slidesDir, previewsDir }, 90000);
   }
 
   async setSlots({ pgmDeckId, pvwDeckId, stageMode = 'ppt' }) {
     return this.sendCommand('SET_SLOTS', { pgmDeckId, pvwDeckId, stageMode });
   }
 
-  async stepSlot({ slot = 'pgm', direction = 'next', slide = null }) {
-    return this.sendCommand('STEP_SLOT', { slot, direction, slide });
+  async stepSlot({ slot = 'pgm', deckId = null, direction = 'next', slide = null }) {
+    return this.sendCommand('STEP_SLOT', { slot, deckId, direction, slide });
   }
 
   async cutSwap() {
@@ -131,6 +143,43 @@ export class PptComEngine {
 
   async captureStage(outputPath) {
     return this.sendCommand('CAPTURE_STAGE', { outputPath });
+  }
+
+  async getSlideText({ deckId, slide = 1 }) {
+    if (this.mockMode) {
+      return {
+        ok: true,
+        deckId,
+        slide,
+        items: [{ shapeIndex: 1, text: `Slide ${slide} 標題文字` }]
+      };
+    }
+    return this.sendCommand('GET_SLIDE_TEXT', { deckId, slide });
+  }
+
+  async setSlideText({ deckId, slide = 1, shapeIndex = 1, text = '', previewsDir = '' }) {
+    if (this.mockMode) {
+      return { ok: true, deckId, slide, shapeIndex, text };
+    }
+    return this.sendCommand('SET_SLIDE_TEXT', { deckId, slide, shapeIndex, text, previewsDir });
+  }
+
+  async openNativeEdit({ deckId, filePath, slide = 1 }) {
+    if (this.mockMode) {
+      return { ok: true, deckId, slide };
+    }
+    return this.sendCommand('OPEN_NATIVE_EDIT', { deckId, filePath, slide });
+  }
+
+  async reloadDeck({ deckId, filePath, previewsDir }) {
+    if (this.mockMode) {
+      return {
+        ok: true,
+        deckId,
+        meta: { deckId, fileName: path.basename(filePath || `${deckId}.pptx`), slideCount: 3, slideClicks: [0, 0, 0] }
+      };
+    }
+    return this.sendCommand('RELOAD_DECK', { deckId, filePath, previewsDir }, 45000);
   }
 
   async shutdown() {
